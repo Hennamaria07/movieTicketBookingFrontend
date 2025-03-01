@@ -1,0 +1,16 @@
+import Home from "./users/Home"
+import Movies from "./users/Movies"
+import Theaters from "./users/Theaters"
+import Ticket from "./users/Ticket"
+import Review from "./users/Review"
+import Offer from "./users/Offer"
+import Wallet from "./users/Wallet"
+import Rewards from "./users/Rewards"
+import Profile from "./users/Profile"
+import TheaterDashboard from "./theater/Dashbroad"
+import Login from "./auth/Login"
+import SignUp from "./auth/Signup"
+import ManageShowsPage from "./theater/MangeShows"
+import SeatPricingPanel from "./theater/SeatPricingPanel"
+
+export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel }
