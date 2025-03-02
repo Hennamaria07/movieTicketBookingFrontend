@@ -40,11 +40,13 @@ interface SidebarProps {
 
 const theaterNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/theater/dashboard', icon: <AiOutlineDashboard size={20} /> },
-  { title: 'Theaters Management', href: '/theater/management', icon: <BiMoviePlay size={20} /> },
+  // { title: 'Theaters Management', href: '/theater/management', icon: <BiMoviePlay size={20} /> },
   { title: 'Manage Shows', href: '/theater/shows', icon: <BiCameraMovie size={20} /> },
   { title: 'Seat Pricing', href: '/theater/pricing', icon: <AiOutlineDollar size={20} /> },
+  { title: "Booking Management", href: '/theater/bookings', icon: <AiOutlineBank size={20} /> },
   { title: 'Reports', href: '/theater/reports', icon: <AiOutlineBarChart size={20} /> },
-  { title: 'Offers', href: '/theater/promotions', icon: <AiOutlineTag size={20} /> },
+  { title: ' Feedback & Reviews', href: '/theater/reviews', icon: <AiOutlineMessage size={20} /> },
+  { title: 'Offers', href: '/theater/offers', icon: <AiOutlineTag size={20} /> },
   { title: 'Settings', href: '/theater/settings', icon: <AiOutlineSetting size={20} /> }
 ];
 

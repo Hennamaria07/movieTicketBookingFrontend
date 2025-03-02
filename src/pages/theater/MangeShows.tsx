@@ -168,7 +168,7 @@ const AnimatedCounter: React.FC<{ value: number; prefix?: string; suffix?: strin
 };
 
 const ManageShowsPage: React.FC = () => {
-    const { theme, toggleTheme } = useTheme();
+    const { theme, toggleTheme } : any = useTheme();
     const [shows, setShows] = useState<Show[]>(initialShows);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [editingShow, setEditingShow] = useState<Show | null>(null);

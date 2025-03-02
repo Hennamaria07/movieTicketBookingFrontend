@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { ThemeProvider } from "./components/ui/theme-provider"
 import { Toaster } from "sonner"
 import UserLayout from "./layout/UserLayout"
-import { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel} from "./pages"
+import { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage } from "./pages"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TheaterLayout from "./layout/TheaterLayout"
 const queryClient = new QueryClient()
@@ -31,6 +31,11 @@ const App = () => {
               <Route path="/theater/dashboard" element={<TheaterDashboard />} />
               <Route path="/theater/shows" element={<ManageShowsPage />} />
               <Route path="/theater/pricing" element={<SeatPricingPanel />} />
+              <Route path="/theater/settings" element={<TheaterAdminSettings />} />
+              <Route path="/theater/bookings" element={<BookingsCancellationsPage />} />
+              <Route path="/theater/reports" element={<TheaterAnalyticsDashboard />} />
+              <Route path="/theater/reviews" element={<CustomerFeedbackPage />} />
+              <Route path="/theater/offers" element={<OffersManagementPage />} />
             </Route>
           </Routes>
         </ThemeProvider>

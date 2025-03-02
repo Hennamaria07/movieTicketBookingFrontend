@@ -12,5 +12,10 @@ import Login from "./auth/Login"
 import SignUp from "./auth/Signup"
 import ManageShowsPage from "./theater/MangeShows"
 import SeatPricingPanel from "./theater/SeatPricingPanel"
+import TheaterAdminSettings from "./theater/TheaterSetting"
+import BookingsCancellationsPage from "./theater/BookingsCancellationsPage"
+import TheaterAnalyticsDashboard from "./theater/TheaterAnalyticsDashboard"
+import CustomerFeedbackPage from "./theater/CustomerFeedbackPage"
+import OffersManagementPage from "./theater/Offers"
 
-export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel }
+export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage }
