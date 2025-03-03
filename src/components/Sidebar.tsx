@@ -17,13 +17,15 @@ import {
   AiOutlineDashboard,
   AiOutlineSetting,
   AiOutlineBarChart,
-  AiOutlineDollar
+  AiOutlineDollar,
+  AiOutlineVideoCamera,
+  AiOutlineControl,
 } from 'react-icons/ai';
-import { BiMoviePlay, BiCameraMovie } from 'react-icons/bi';
+import { BiCameraMovie } from 'react-icons/bi';
 import { TbTicket } from 'react-icons/tb';
 import { useTheme } from './ui/theme-provider';
 import { lightTheme, darkTheme } from '../lib/themes';
-import { FaFilm } from 'react-icons/fa';
+import { FaFilm, FaUserShield, FaMoneyBillWave, FaChartLine, FaShieldAlt, FaCogs } from 'react-icons/fa';
 
 interface NavItem {
   title: string;
@@ -34,7 +36,7 @@ interface NavItem {
 interface SidebarProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  userType: 'theater' | 'customer';
+  userType: 'theater' | 'customer' | 'admin';
   brandName?: string;
 }
 
@@ -60,6 +62,17 @@ const customerNavItems: NavItem[] = [
   { title: 'Wallet', href: '/wallet', icon: <AiOutlineWallet size={20} /> },
   { title: 'Loyalty & Rewards', href: '/rewards', icon: <AiOutlineGift size={20} /> },
   { title: 'Profile', href: '/profile', icon: <AiOutlineUser size={20} /> }
+];
+
+const adminNavItems: NavItem[] = [
+  { title: 'Admin Dashboard', href: '/admin/dashboard', icon: <AiOutlineDashboard size={20} /> },
+  { title: 'User Management', href: '/admin/users', icon: <FaUserShield size={20} /> },
+  { title: 'Theater Management', href: '/admin/theaters', icon: <AiOutlineVideoCamera size={20} /> },
+  { title: 'Content Moderation', href: '/admin/content', icon: <AiOutlineControl size={20} /> },
+  { title: 'Revenue & Finance', href: '/admin/finance', icon: <FaMoneyBillWave size={20} /> },
+  { title: 'System Analytics', href: '/admin/analytics', icon: <FaChartLine size={20} /> },
+  { title: 'Security & Compliance', href: '/admin/security', icon: <FaShieldAlt size={20} /> },
+  { title: 'Settings & Config', href: '/admin/settings', icon: <FaCogs size={20} /> }
 ];
 
 const menuItemVariants = {
@@ -90,7 +103,20 @@ export const Sidebar = ({ isOpen, setIsOpen, userType, brandName = "MovieHub" }:
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
-  const navItems = userType === 'theater' ? theaterNavItems : customerNavItems;
+  
+  // Choose the appropriate navigation items based on user type
+  const getNavItems = () => {
+    switch (userType) {
+      case 'theater':
+        return theaterNavItems;
+      case 'admin':
+        return adminNavItems;
+      default:
+        return customerNavItems;
+    }
+  };
+  
+  const navItems = getNavItems();
   const navigate = useNavigate();
   const { theme } = useTheme();
   const currentTheme = theme === 'dark' ? darkTheme : lightTheme;
@@ -188,7 +214,7 @@ export const Sidebar = ({ isOpen, setIsOpen, userType, brandName = "MovieHub" }:
                     : "bg-gradient-to-r from-purple-600 to-blue-500"
                 )}
               >
-                {brandName}
+                {userType === 'admin' ? `${brandName} Admin` : brandName}
               </motion.h1>
             )}
           </AnimatePresence>
