@@ -18,4 +18,13 @@ import TheaterAnalyticsDashboard from "./theater/TheaterAnalyticsDashboard"
 import CustomerFeedbackPage from "./theater/CustomerFeedbackPage"
 import OffersManagementPage from "./theater/Offers"
 
-export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage }
+import AdminDashboard from "./admin/AdminHome"
+import UserManagementPage from "./admin/UserManagement"
+import TheaterManagementPage from "./admin/TheaterManagement"
+import ContentModerationPage from "./admin/ContentModerationPage"
+import AdminFinanceDashboard from "./admin/AdminFinanceDashboard"
+import SystemAnalyticsPage from "./admin/SystemAnalyticsPage"
+import SecurityAndComplianceDashboard from "./admin/SecurityAndComplianceDashboard"
+import AdminSettingsPage from "./admin/AdminSettingsPage"
+
+export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage, AdminDashboard, UserManagementPage,TheaterManagementPage, ContentModerationPage, AdminFinanceDashboard, SystemAnalyticsPage, SecurityAndComplianceDashboard, AdminSettingsPage }

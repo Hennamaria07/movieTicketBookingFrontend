@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    FiFilm, FiDollarSign, FiUsers, FiPlus, FiEdit, FiTrash2, FiSearch, FiCalendar, FiX, FiSun, FiMoon
+    FiFilm, FiDollarSign, FiUsers, FiPlus, FiEdit, FiTrash2, FiX,
 } from 'react-icons/fi';
 import { FaTicketAlt, FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -168,7 +168,7 @@ const AnimatedCounter: React.FC<{ value: number; prefix?: string; suffix?: strin
 };
 
 const ManageShowsPage: React.FC = () => {
-    const { theme, toggleTheme } : any = useTheme();
+    const { theme, toggleTheme }= useTheme();
     const [shows, setShows] = useState<Show[]>(initialShows);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [editingShow, setEditingShow] = useState<Show | null>(null);
@@ -215,10 +215,10 @@ const ManageShowsPage: React.FC = () => {
         let sortableShows = [...filteredShows];
         if (sortConfig.key !== null) {
             sortableShows.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) {
+                if (a[sortConfig.key!] < b[sortConfig.key!]) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (a[sortConfig.key] > b[sortConfig.key]) {
+                if (a[sortConfig.key!] > b[sortConfig.key!]) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;

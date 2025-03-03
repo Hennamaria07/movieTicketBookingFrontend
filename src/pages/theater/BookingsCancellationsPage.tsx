@@ -64,14 +64,14 @@ const BookingsCancellationsPage: React.FC = () => {
   
   // Status badge renderer
   const renderStatusBadge = (status: string) => {
-    let variant: "default" | "secondary" | "destructive" | "outline" | "success" = "default";
+    let variant: "default" | "outline" | "destructive" | "secondary" = "default";
     let label = status;
     
     switch(status) {
       case 'confirmed':
       case 'approved':
       case 'delivered':
-        variant = "success";
+        variant = "default"; // Replace "success" with "default"
         break;
       case 'pending':
         variant = "secondary";
