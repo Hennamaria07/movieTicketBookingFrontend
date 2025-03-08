@@ -13,7 +13,7 @@ export const nowShowingMovies: Movie[] = [
   {
     id: '2',
     title: 'Poor Things',
-    posterPath: '/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg',
+    poster: 'https://www.themoviedb.org/t/p/original/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg',
     rating: 4.3,
     duration: '141 min',
     genre: ['Comedy', 'Drama', 'Sci-Fi'],
@@ -22,7 +22,7 @@ export const nowShowingMovies: Movie[] = [
   {
     id: '3',
     title: 'Kung Fu Panda 4',
-    posterPath: '/kDp1vUBnMpe8ak4rjgl3cLELqld.jpg',
+    poster: 'https://d28hgpri8am2if.cloudfront.net/book_images/onix/cvr9781524889609/kung-fu-panda-4-movie-novel-9781524889609_hr.jpg',
     rating: 4.0,
     duration: '94 min',
     genre: ['Animation', 'Action', 'Adventure'],
@@ -31,7 +31,7 @@ export const nowShowingMovies: Movie[] = [
   {
     id: '4',
     title: 'Madame Web',
-    posterPath: '/rULWuutDcN5NvtiZi4FRPzRYWSh.jpg',
+    poster: 'https://www.themoviedb.org/t/p/original/rULWuutDcN5NvtiZi4FRPzRYWSh.jpg',
     rating: 3.8,
     duration: '116 min',
     genre: ['Action', 'Sci-Fi'],

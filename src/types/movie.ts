@@ -1,7 +1,7 @@
 export interface Movie {
   id: string
   title: string
-  posterPath: string
+  poster: string
   rating: number
   duration: string
   releaseDate?: string
