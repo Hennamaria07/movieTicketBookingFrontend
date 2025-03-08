@@ -18,9 +18,11 @@ import {
   AiOutlineSun
 } from 'react-icons/ai';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 // Form validation schema
 const schema = yup.object().shape({
+  userId: yup.string().required('User ID is required').min(4, 'User ID must be at least 4 characters'),
   firstName: yup.string().required('First name is required'),
   lastName: yup.string().required('Last name is required'),
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -40,16 +42,23 @@ const schema = yup.object().shape({
     .string()
     .matches(/^\+?[0-9]{10,15}$/, 'Phone number is not valid')
     .required('Phone number is required'),
+  avatar: yup
+    .mixed()
+    .required('Profile picture is required')
+    .test('fileSize', 'File size must be less than 5MB', (value) => {
+      return value && value[0] && value[0].size <= 5000000;
+    })
+    .test('fileType', 'Only image files are allowed', (value) => {
+      return value && value[0] && ['image/jpeg', 'image/png', 'image/gif'].includes(value[0].type);
+    }),
 });
 
 const SignupForm = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check system preference or localStorage
     const savedTheme = localStorage.getItem('theme');
     return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
@@ -66,7 +75,6 @@ const SignupForm = () => {
   });
 
   useEffect(() => {
-    // Apply theme class to document
     document.documentElement.classList.toggle('dark', isDarkMode);
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
@@ -74,32 +82,29 @@ const SignupForm = () => {
   const onSubmit = async (data) => {
     try {
       setIsLoading(true);
-      setError(null);
 
-      // Create FormData object for file upload
       const formData = new FormData();
+      formData.append('userId', data.userId);
       formData.append('firstName', data.firstName);
       formData.append('lastName', data.lastName);
       formData.append('email', data.email);
       formData.append('password', data.password);
       formData.append('phone', data.phone);
-      formData.append('role', 'user'); // Default role
-
-      // Append avatar file if selected
-      if (data.avatar && data.avatar[0]) {
-        formData.append('avatar', data.avatar[0]);
-      }
+      formData.append('role', 'user');
+      formData.append('avatar', data.avatar[0]);
 
       await authService.signup(formData);
-      navigate('/login', { state: { message: 'Registration successful! Please login.' } });
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      toast.success('Registration successful! Redirecting to login...');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1500);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // For avatar preview
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -178,27 +183,20 @@ const SignupForm = () => {
           Create your account
         </motion.h2>
 
-        {error && (
-          <motion.div 
-            variants={itemVariants}
-            className="p-3 mb-4 bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 rounded"
-          >
-            {error}
-          </motion.div>
-        )}
-
         <motion.form 
           onSubmit={handleSubmit(onSubmit)} 
           className="space-y-4"
           variants={formVariants}
           encType="multipart/form-data"
         >
+
           {/* Avatar Upload */}
           <motion.div variants={itemVariants} className="flex flex-col items-center mb-4">
             <div className="relative w-24 h-24 mb-2">
               <div className={cn(
                 "w-24 h-24 rounded-full flex items-center justify-center overflow-hidden border-2",
-                isDarkMode ? "border-gray-700 bg-gray-700" : "border-gray-200 bg-gray-100"
+                isDarkMode ? "border-gray-700 bg-gray-700" : "border-gray-200 bg-gray-100",
+                errors.avatar && "border-red-500"
               )}>
                 {avatarPreview ? (
                   <img 
@@ -231,11 +229,15 @@ const SignupForm = () => {
                 }}
               />
             </div>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Upload profile picture (optional)</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Upload profile picture (required)</span>
+            {errors.avatar && (
+              <p className="mt-1 text-sm text-red-500">{errors.avatar.message}</p>
+            )}
           </motion.div>
 
-          {/* First Name and Last Name (side by side) */}
+          {/* First Name and Last Name */}
           <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
+            {/* First Name */}
             <div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
@@ -259,6 +261,7 @@ const SignupForm = () => {
               )}
             </div>
             
+            {/* Last Name */}
             <div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
@@ -281,6 +284,30 @@ const SignupForm = () => {
                 <p className="mt-1 text-sm text-red-500">{errors.lastName.message}</p>
               )}
             </div>
+          </motion.div>
+          
+          {/* User ID */}
+          <motion.div variants={itemVariants}>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
+                <AiOutlineUser className="h-5 w-5" />
+              </span>
+              <input
+                id="userId"
+                placeholder="User ID"
+                {...register("userId")}
+                className={cn(
+                  "w-full pl-10 pr-4 py-3 rounded-lg focus:outline-none",
+                  isDarkMode 
+                    ? "bg-gray-700 text-white border-gray-600 focus:ring-purple-500 focus:border-purple-500" 
+                    : "bg-gray-100 text-gray-900 border-gray-300 focus:ring-purple-500 focus:border-purple-500",
+                  errors.userId ? "border-red-500" : "border"
+                )}
+              />
+            </div>
+            {errors.userId && (
+              <p className="mt-1 text-sm text-red-500">{errors.userId.message}</p>
+            )}
           </motion.div>
 
           {/* Email */}
@@ -331,7 +358,7 @@ const SignupForm = () => {
               <p className="mt-1 text-sm text-red-500">{errors.phone.message}</p>
             )}
           </motion.div>
-          
+
           {/* Password */}
           <motion.div variants={itemVariants}>
             <div className="relative">
@@ -367,7 +394,7 @@ const SignupForm = () => {
               <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>
             )}
           </motion.div>
-          
+
           {/* Confirm Password */}
           <motion.div variants={itemVariants}>
             <div className="relative">
@@ -403,7 +430,7 @@ const SignupForm = () => {
               <p className="mt-1 text-sm text-red-500">{errors.confirmPassword.message}</p>
             )}
           </motion.div>
-          
+
           {/* Password strength indicator */}
           {watch("password") && (
             <motion.div variants={itemVariants}>
@@ -441,7 +468,7 @@ const SignupForm = () => {
               </div>
             </motion.div>
           )}
-          
+
           {/* Submit Button */}
           <motion.div variants={itemVariants}>
             <Button
@@ -459,7 +486,7 @@ const SignupForm = () => {
             </Button>
           </motion.div>
         </motion.form>
-        
+
         <motion.div 
           variants={itemVariants}
           className="mt-6 text-center"
