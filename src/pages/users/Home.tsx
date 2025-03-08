@@ -128,13 +128,13 @@ const Home = () => {
         </AnimatePresence>
 
         {/* Floating Movie Elements */}
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 hidden md:flex">
           {bannerImages.map((movie, i) => (
             <motion.div
               key={movie.id}
               className="absolute w-32 h-48 rounded-lg overflow-hidden shadow-2xl"
               style={{
-                left: `${20 + i * 30}%`,
+                left: `${15 + i * 30}%`,
                 top: '20%',
               }}
               animate={{
@@ -160,7 +160,7 @@ const Home = () => {
         </div>
 
         {/* Animated Circles */}
-        <div className="absolute inset-0">
+        {/* <div className="absolute inset-0">
           {[1, 2, 3, 4].map((_, i) => (
             <motion.div
               key={i}
@@ -182,7 +182,7 @@ const Home = () => {
               }}
             />
           ))}
-        </div>
+        </div> */}
 
         {/* Sparkles */}
         <div className="absolute inset-0">

@@ -129,7 +129,7 @@ const TheaterDashboard = () => {
   };
   
   return (
-    <div className="min-h-screen mt-6 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50">
+    <div className="min-h-screen mt-6 text-slate-900 dark:text-slate-50">
       {/* Header */}
       
       {/* Main content */}
