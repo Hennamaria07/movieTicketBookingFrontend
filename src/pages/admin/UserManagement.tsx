@@ -1,53 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
+import { toast } from "sonner";
 import { 
-  FaUserCircle, 
-  FaSearch, 
-  FaFilter,
-  FaSortUp,
-  FaSortDown,
-  FaSort
+  FaUserCircle, FaSearch, FaFilter, FaSortUp, FaSortDown, FaSort 
 } from "react-icons/fa";
 import { MdEmail } from "react-icons/md";
 import { RiUserSettingsFill } from "react-icons/ri";
 import { 
-  IoCheckmarkCircle, 
-  IoBanSharp, 
-  IoTrashOutline, 
-  IoMailOutline,
-  IoChevronDownOutline,
-  IoChevronUpOutline,
-  IoUnlinkOutline
+  IoCheckmarkCircle, IoBanSharp, IoTrashOutline, IoMailOutline, 
+  IoChevronDownOutline, IoChevronUpOutline, IoUnlinkOutline 
 } from "react-icons/io5";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../../components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "../../components/ui/dialog";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
 } from "../../components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -55,9 +29,10 @@ import { Textarea } from "../../components/ui/textarea";
 import { Badge } from "../../components/ui/badge";
 import { Label } from "../../components/ui/Label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tab";
+import { API_GET_ALL_USERS_URL, API_UPDATE_USER_URL, API_DELETE_USER_URL } from "../../utils/api";
 
 // Types
-type UserRole = 'Admin' | 'User' | 'Staff';
+type UserRole = 'admin' | 'theaterOwner' | 'user';
 type UserStatus = 'Active' | 'Banned' | 'Pending Verification';
 type TicketStatus = 'Open' | 'In Progress' | 'Resolved';
 
@@ -68,6 +43,7 @@ interface User {
   role: UserRole;
   status: UserStatus;
   joinDate: string;
+  bannedReason?: string;
 }
 
 interface Ticket {
@@ -84,24 +60,9 @@ interface SortConfig {
   direction: 'ascending' | 'descending';
 }
 
-// Mock Data
-const mockUsers: User[] = [
-  { id: "1", name: "John Smith", email: "john.smith@example.com", role: "Admin", status: "Active", joinDate: "2023-05-15" },
-  { id: "2", name: "Sarah Johnson", email: "sarah.j@example.com", role: "Staff", status: "Active", joinDate: "2023-08-22" },
-  { id: "3", name: "Michael Brown", email: "m.brown@example.com", role: "User", status: "Pending Verification", joinDate: "2024-01-04" },
-  { id: "4", name: "Emily Davis", email: "emily.d@example.com", role: "User", status: "Banned", joinDate: "2023-11-30" },
-  { id: "5", name: "Robert Wilson", email: "r.wilson@example.com", role: "Staff", status: "Active", joinDate: "2023-09-10" },
-];
-
-const mockTickets: Ticket[] = [
-  { id: "t1", userId: "2", summary: "Cannot access ticket sales report", description: "I'm trying to generate the monthly ticket sales report but keep getting an error message.", dateTime: "2024-02-28T14:30:00", status: "Open" },
-  { id: "t2", userId: "3", summary: "Account verification issue", description: "I submitted my verification documents 3 days ago but haven't received any updates.", dateTime: "2024-02-27T09:15:00", status: "In Progress" },
-  { id: "t3", userId: "4", summary: "Request to unban account", description: "My account was banned by mistake. I would like to request a review of this decision.", dateTime: "2024-02-25T16:45:00", status: "Open" },
-];
-
 const UserManagementPage: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
+  const [users, setUsers] = useState<User[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "All">("All");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
@@ -113,19 +74,56 @@ const UserManagementPage: React.FC = () => {
   const [banReason, setBanReason] = useState("");
   const [activeTab, setActiveTab] = useState("users");
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'ascending' });
+  const [loading, setLoading] = useState(true);
 
-  // Filtered users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRoleFilter = roleFilter === "All" || user.role === roleFilter;
-    const matchesStatusFilter = statusFilter === "All" || user.status === statusFilter;
-    return matchesSearch && matchesRoleFilter && matchesStatusFilter;
-  });
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(API_GET_ALL_USERS_URL);
+        const fetchedUsers = response.data.data.map((user: any) => ({
+          id: user._id,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          role: user.role,
+          status: user.status === 'Inactive' || user.status === 'Unbanned' ? 'Active' : user.status,
+          joinDate: new Date(user.createdAt).toISOString().split('T')[0],
+          bannedReason: user.bannedReason,
+        }));
+        setUsers(fetchedUsers);
+        // toast.success("Users fetched successfully");
+      } catch (err) {
+        toast.error("Failed to fetch users");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
-  // Sorting function
-  const sortedUsers = React.useMemo(() => {
+  // Mock tickets (replace with API if available)
+  useEffect(() => {
+    setTickets([
+      { id: "t1", userId: "2", summary: "Cannot access ticket sales report", description: "Error message on report generation.", dateTime: "2024-02-28T14:30:00", status: "Open" },
+      { id: "t2", userId: "3", summary: "Account verification issue", description: "Verification delay.", dateTime: "2024-02-27T09:15:00", status: "In Progress" },
+    ]);
+  }, []);
+
+  // Filtered and sorted users
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const matchesSearch = 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRoleFilter = roleFilter === "All" || user.role === roleFilter;
+      const matchesStatusFilter = statusFilter === "All" || user.status === statusFilter;
+      return matchesSearch && matchesRoleFilter && matchesStatusFilter;
+    });
+  }, [users, searchTerm, roleFilter, statusFilter]);
+
+  const sortedUsers = useMemo(() => {
     let sortableUsers = [...filteredUsers];
     if (sortConfig.key) {
       sortableUsers.sort((a, b) => {
@@ -138,7 +136,7 @@ const UserManagementPage: React.FC = () => {
       });
     }
     return sortableUsers;
-  }, [users, searchTerm, roleFilter, statusFilter, sortConfig]);
+  }, [filteredUsers, sortConfig]);
 
   const requestSort = (key: keyof User) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -150,17 +148,47 @@ const UserManagementPage: React.FC = () => {
 
   const getSortIcon = (key: keyof User) => {
     if (sortConfig.key !== key) return <FaSort className="ml-1" />;
-    if (sortConfig.direction === 'ascending') return <FaSortUp className="ml-1" />;
-    return <FaSortDown className="ml-1" />;
+    return sortConfig.direction === 'ascending' ? <FaSortUp className="ml-1" /> : <FaSortDown className="ml-1" />;
   };
 
-  // Handlers
-  const handleUnbanClick = (user: User) => {
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: "Active" as UserStatus } : u));
+  // API Handlers
+  const updateUserStatus = async (userId: string, status: UserStatus, bannedReason?: string) => {
+    try {
+      const payload = { status };
+      if (bannedReason) payload.bannedReason = bannedReason;
+      const response = await axios.patch(`${API_UPDATE_USER_URL}/${userId}`, payload);
+      setUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, status, bannedReason: bannedReason || user.bannedReason } : user
+      ));
+      return response.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || "Failed to update user status");
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    try {
+      await axios.delete(`${API_DELETE_USER_URL}/${userId}`);
+      setUsers(prev => prev.filter(user => user.id !== userId));
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || "Failed to delete user");
+    }
+  };
+
+  // Event Handlers
+  const handleUnbanClick = async (user: User) => {
+    try {
+      await updateUserStatus(user.id, "Active");
+      toast.success(`${user.name} has been unbanned successfully`);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
   const toggleTicket = (ticketId: string) => {
-    setExpandedTickets(prev => prev.includes(ticketId) ? prev.filter(id => id !== ticketId) : [...prev, ticketId]);
+    setExpandedTickets(prev => 
+      prev.includes(ticketId) ? prev.filter(id => id !== ticketId) : [...prev, ticketId]
+    );
   };
 
   const handleVerifyClick = (user: User) => {
@@ -178,30 +206,48 @@ const UserManagementPage: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleVerifyConfirm = () => {
+  const handleVerifyConfirm = async () => {
     if (selectedUser) {
-      setUsers(prev => prev.map(user => user.id === selectedUser.id ? { ...user, status: "Active" } : user));
-      setVerifyDialogOpen(false);
+      try {
+        await updateUserStatus(selectedUser.id, "Active");
+        toast.success(`${selectedUser.name} has been verified successfully`);
+        setVerifyDialogOpen(false);
+      } catch (err: any) {
+        toast.error(err.message);
+      }
     }
   };
 
-  const handleBanConfirm = () => {
+  const handleBanConfirm = async () => {
     if (selectedUser) {
-      setUsers(prev => prev.map(user => user.id === selectedUser.id ? { ...user, status: "Banned" } : user));
-      setBanDialogOpen(false);
-      setBanReason("");
+      try {
+        await updateUserStatus(selectedUser.id, "Banned", banReason);
+        toast.success(`${selectedUser.name} has been banned successfully`);
+        setBanDialogOpen(false);
+        setBanReason("");
+      } catch (err: any) {
+        toast.error(err.message);
+      }
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (selectedUser) {
-      setUsers(prev => prev.filter(user => user.id !== selectedUser.id));
-      setDeleteDialogOpen(false);
+      try {
+        await deleteUser(selectedUser.id);
+        toast.success(`${selectedUser.name} has been deleted successfully`);
+        setDeleteDialogOpen(false);
+      } catch (err: any) {
+        toast.error(err.message);
+      }
     }
   };
 
   const handleResolveTicket = (ticketId: string) => {
-    setTickets(prev => prev.map(ticket => ticket.id === ticketId ? { ...ticket, status: "Resolved" } : ticket));
+    setTickets(prev => prev.map(ticket => 
+      ticket.id === ticketId ? { ...ticket, status: "Resolved" } : ticket
+    ));
+    toast.success("Ticket marked as resolved");
   };
 
   const getUserById = (userId: string): User | undefined => users.find(user => user.id === userId);
@@ -224,6 +270,8 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
       <div className="container mx-auto space-y-6">
@@ -231,7 +279,7 @@ const UserManagementPage: React.FC = () => {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">User Management</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">Manage users and support tickets in the theater management system</p>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage users and support tickets</p>
           </div>
         </div>
 
@@ -266,9 +314,9 @@ const UserManagementPage: React.FC = () => {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setRoleFilter("All")}>All Roles</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setRoleFilter("Admin")}>Admin</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setRoleFilter("Staff")}>Staff</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setRoleFilter("User")}>User</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setRoleFilter("admin")}>Admin</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setRoleFilter("theaterOwner")}>Theater Owner</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setRoleFilter("user")}>User</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <DropdownMenu>

@@ -5,3 +5,6 @@ export const API_DELETE_USER_URL = API_BASE_URL + import.meta.env.VITE_DELETE_US
 export const API_GET_ALL_USERS_URL = API_BASE_URL + import.meta.env.VITE_GET_ALL_USERS_URL;
 export const API_GET_THEATER_OWNERS_URL = API_BASE_URL + import.meta.env.VITE_GET_ALL_THEATER_OWNERS_URL;
 
+export const API_LOGIN_URL = API_BASE_URL + import.meta.env.VITE_LOGIN_URL;
+export const API_SIGNUP_URL = API_BASE_URL + import.meta.env.VITE_SIGNUP_URL;
+
