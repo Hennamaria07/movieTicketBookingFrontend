@@ -45,10 +45,10 @@ const schema = yup.object().shape({
   avatar: yup
     .mixed()
     .required('Profile picture is required')
-    .test('fileSize', 'File size must be less than 5MB', (value) => {
+    .test('fileSize', 'File size must be less than 5MB', (value: any) => {
       return value && value[0] && value[0].size <= 5000000;
     })
-    .test('fileType', 'Only image files are allowed', (value) => {
+    .test('fileType', 'Only image files are allowed', (value: any) => {
       return value && value[0] && ['image/jpeg', 'image/png', 'image/gif'].includes(value[0].type);
     }),
 });
@@ -79,7 +79,7 @@ const SignupForm = () => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (data: any) => {
     try {
       setIsLoading(true);
 
@@ -98,17 +98,17 @@ const SignupForm = () => {
       setTimeout(() => {
         navigate('/login');
       }, 1500);
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = (e: any) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
+      const reader: any = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result);
       };
