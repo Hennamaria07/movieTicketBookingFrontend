@@ -233,7 +233,6 @@ const TheaterAnalyticsDashboard: React.FC = () => {
           </motion.div>
         </TabsContent>
 
-        {/* Demographics Tab */}
         <TabsContent value="demographics">
           <motion.div 
             className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
