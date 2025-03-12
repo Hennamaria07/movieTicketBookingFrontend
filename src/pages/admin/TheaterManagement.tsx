@@ -196,13 +196,14 @@ const TheaterManagementPage: React.FC = () => {
       setIsLoading(true);
       try {
         const response = await axios.get(API_GET_THEATER_OWNERS_URL, { withCredentials: true });
+        console.log("API Response:", response.data); // Debug API response
         const fetchedOwners = (response?.data?.data || []).map((owner: any) => ({
           id: owner._id || "",
           firstName: owner.firstName || "",
           lastName: owner.lastName || "",
           userId: owner.userId || "",
           email: owner.email || "",
-          phone: owner.phone || "",
+          phone: owner.phone || "", // Ensure phone is mapped correctly
           assignedTheaters: owner.assignedTheaters || [],
           status: owner.status || "Pending Approval",
           image: owner.avatar?.url || "",
@@ -253,6 +254,7 @@ const TheaterManagementPage: React.FC = () => {
     } else {
       setValue("image", null);
       setImagePreview("");
+      toast.error("Please select a valid image file");
     }
   };
 
@@ -266,16 +268,28 @@ const TheaterManagementPage: React.FC = () => {
     formData.append("phone", data.phone);
     formData.append("role", "theaterOwner");
     formData.append("status", data.status);
-    if (data.image && (!selectedOwner || changeAvatar)) formData.append("avatar", data.image);
+
+    if (data.image && (!selectedOwner || changeAvatar)) {
+      if (data.image instanceof File) {
+        formData.append("avatar", data.image);
+      } else {
+        console.error("data.image is not a File:", data.image);
+        toast.error("Please select a valid image file");
+        return;
+      }
+    }
+
+    console.log("FormData contents:");
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
 
     try {
       if (selectedOwner) {
         if (data.resetPassword && data.newPassword) {
           formData.append("newPassword", data.newPassword);
         }
-        const response = await axios.patch(`${API_UPDATE_USER_URL}/${selectedOwner.id}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        const response = await axios.patch(`${API_UPDATE_USER_URL}/${selectedOwner.id}`, formData);
         toast.success(response?.data?.message);
         const updatedOwner = {
           id: response.data.user.id,
@@ -287,13 +301,12 @@ const TheaterManagementPage: React.FC = () => {
           assignedTheaters: selectedOwner.assignedTheaters,
           status: response.data.user.status,
           image: response.data.user.avatar?.url || selectedOwner.image,
+          role: "theaterOwner",
         };
         setOwners((prev) => prev.map((o) => (o.id === selectedOwner.id ? updatedOwner : o)));
       } else {
         formData.append("password", generatedPassword);
-        const response = await axios.post(API_ADD_USER_URL, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        const response = await axios.post(API_ADD_USER_URL, formData);
         toast.success(response?.data?.message);
         const newOwner = {
           id: response.data.user.id,
@@ -310,7 +323,7 @@ const TheaterManagementPage: React.FC = () => {
       }
       resetForm();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
       console.error("Form submission error:", error.response?.data || error.message);
     }
   };
@@ -329,16 +342,19 @@ const TheaterManagementPage: React.FC = () => {
   };
 
   const handleEdit = (owner: TheaterOwner) => {
+    console.log("Editing owner:", owner); // Debug log
     setSelectedOwner(owner);
-    setValue("firstName", owner.firstName);
-    setValue("lastName", owner.lastName);
-    setValue("userId", owner.userId);
-    setValue("email", owner.email);
-    setValue("phone", owner.phone);
-    setValue("resetPassword", false);
-    setValue("newPassword", "");
-    setValue("changeAvatar", false);
-    setValue("status", owner.status);
+    reset({
+      firstName: owner.firstName,
+      lastName: owner.lastName,
+      userId: owner.userId,
+      email: owner.email,
+      phone: owner.phone || "", // Ensure phone is set
+      resetPassword: false,
+      newPassword: "",
+      changeAvatar: false,
+      status: owner.status,
+    });
     setImagePreview(owner.image || "");
     setGeneratedPassword("");
     setIsModalOpen(true);
@@ -862,34 +878,34 @@ const TheaterManagementPage: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium">First Name</label>
-                    <Input {...register("firstName")} />
+                    <Input {...register("firstName")} placeholder="Enter first name" />
                     {errors.firstName && <p className="text-red-500 text-xs">{errors.firstName.message}</p>}
                   </div>
                   <div>
                     <label className="text-sm font-medium">Last Name</label>
-                    <Input {...register("lastName")} />
+                    <Input {...register("lastName")} placeholder="Enter last name" />
                     {errors.lastName && <p className="text-red-500 text-xs">{errors.lastName.message}</p>}
                   </div>
                   <div>
                     <label className="text-sm font-medium">Employee ID</label>
-                    <Input {...register("userId")} onChange={handleUserIdChange} />
+                    <Input {...register("userId")} onChange={handleUserIdChange} placeholder="Enter employee ID" />
                     {errors.userId && <p className="text-red-500 text-xs">{errors.userId.message}</p>}
                   </div>
                   <div>
                     <label className="text-sm font-medium">Email</label>
-                    <Input {...register("email")} />
+                    <Input {...register("email")} placeholder="Enter email" />
                     {errors.email && <p className="text-red-500 text-xs">{errors.email.message}</p>}
                   </div>
                   <div>
                     <label className="text-sm font-medium">Phone</label>
-                    <Input {...register("phone")} />
+                    <Input {...register("phone")} placeholder="Enter phone number" />
                     {errors.phone && <p className="text-red-500 text-xs">{errors.phone.message}</p>}
                   </div>
                   {!selectedOwner && (
                     <div>
                       <label className="text-sm font-medium">Password</label>
                       <div className="flex gap-2">
-                        <Input value={generatedPassword} readOnly />
+                        <Input value={generatedPassword} readOnly placeholder="Generated password" />
                         <Button type="button" onClick={copyToClipboard}>
                           <FiCopy />
                         </Button>
@@ -905,7 +921,7 @@ const TheaterManagementPage: React.FC = () => {
                         {resetPassword && (
                           <div className="mt-2">
                             <label className="text-sm font-medium">New Password</label>
-                            <Input type="password" {...register("newPassword")} />
+                            <Input type="password" {...register("newPassword")} placeholder="Enter new password" />
                             {errors.newPassword && <p className="text-red-500 text-xs">{errors.newPassword.message}</p>}
                           </div>
                         )}
@@ -935,7 +951,7 @@ const TheaterManagementPage: React.FC = () => {
                         {changeAvatar && (
                           <div className="mt-2">
                             <label className="text-sm font-medium">New Profile Image</label>
-                            <Input type="file" {...register("image")} onChange={handleImageUpload} accept="image/*" />
+                            <Input type="file" onChange={handleImageUpload} accept="image/*" />
                             {errors.image && <p className="text-red-500 text-xs">{errors.image.message}</p>}
                             {imagePreview && (
                               <img src={imagePreview} alt="Preview" className="h-20 w-20 rounded-full mt-2" />
@@ -948,7 +964,7 @@ const TheaterManagementPage: React.FC = () => {
                   {!selectedOwner && (
                     <div>
                       <label className="text-sm font-medium">Profile Image (Required)</label>
-                      <Input type="file" {...register("image")} onChange={handleImageUpload} accept="image/*" />
+                      <Input type="file" onChange={handleImageUpload} accept="image/*" />
                       {errors.image && <p className="text-red-500 text-xs">{errors.image.message}</p>}
                       {imagePreview && <img src={imagePreview} alt="Preview" className="h-20 w-20 rounded-full mt-2" />}
                     </div>

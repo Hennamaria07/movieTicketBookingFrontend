@@ -1,15 +1,15 @@
+// src/components/LoginForm.tsx
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { FormInput } from '../../components/ui/form-input';
 import { authService } from '../../utils/services';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginData } from '../../types/user';
 import { API_BASE_URL } from '../../utils/api';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 import {
   AiOutlineGoogle,
@@ -22,6 +22,9 @@ import {
   AiOutlineMoon,
   AiOutlineSun
 } from 'react-icons/ai';
+import { useDispatch } from 'react-redux';
+import { addAuth } from '../../redux/features/auth/auth';
+import { toast } from 'sonner'; // Import sonner toast
 
 const schema = yup.object().shape({
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -30,10 +33,8 @@ const schema = yup.object().shape({
 
 const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check system preference or localStorage
     const savedTheme = localStorage.getItem('theme');
     return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
@@ -41,6 +42,7 @@ const LoginForm = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
+  const dispatch = useDispatch();
 
   const {
     register,
@@ -51,55 +53,66 @@ const LoginForm = () => {
   });
 
   useEffect(() => {
-    // Apply theme class to document
     document.documentElement.classList.toggle('dark', isDarkMode);
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  // Handle token from social auth callback
   useEffect(() => {
     const handleSocialAuthCallback = async () => {
       const token = searchParams.get('token');
       if (token) {
         try {
           setIsLoading(true);
-          // Verify the token
           const response = await authService.verifySocialToken(token);
-          // Login the user
           login(token);
+          dispatch(addAuth({
+            isAuthenticated: true,
+            userInfo: response.user,
+            token: response.token || token,
+          }));
+          toast.success('Successfully logged in with social account!'); // Success toast
           navigate('/dashboard');
         } catch (err: any) {
-          setError(err.response?.data?.message || 'Authentication failed');
+          toast.error(err.response?.data?.message || 'Authentication failed'); // Error toast
         } finally {
           setIsLoading(false);
         }
       }
-      
-      // Check for error in URL
+
       const urlError = searchParams.get('error');
       if (urlError) {
-        setError(decodeURIComponent(urlError));
+        toast.error(decodeURIComponent(urlError)); // Error toast for URL error
       }
     };
-    
+
     handleSocialAuthCallback();
-  }, [searchParams, login, navigate]);
+  }, [searchParams, login, navigate, dispatch]);
 
   const onSubmit = async (data: LoginData) => {
     try {
       setIsLoading(true);
-      setError(null);
       const response = await authService.login(data);
       login(response.token);
-      navigate('/dashboard');
+      dispatch(addAuth({
+        isAuthenticated: true,
+        userInfo: response.user,
+        token: response.token,
+      }));
+      toast.success('Login successful!'); // Success toast
+      if (response?.user?.role === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else if (response?.user?.role === 'user') {
+        navigate('/', { replace: true });
+      } else {
+        navigate('/theater/dashboard', { replace: true });
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      toast.error(err.response?.data?.message || 'Invalid email or password'); // Error toast
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle social login redirects
   const handleSocialLogin = (provider: string) => {
     window.location.href = `${API_BASE_URL}/auth/${provider}`;
   };
@@ -170,15 +183,6 @@ const LoginForm = () => {
             className="p-3 mb-4 bg-green-100 border border-green-400 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 rounded"
           >
             {location.state.message}
-          </motion.div>
-        )}
-        
-        {error && (
-          <motion.div 
-            variants={itemVariants}
-            className="p-3 mb-4 bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 rounded"
-          >
-            {error}
           </motion.div>
         )}
         

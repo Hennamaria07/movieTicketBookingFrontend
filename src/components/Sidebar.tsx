@@ -26,6 +26,8 @@ import { TbTicket } from 'react-icons/tb';
 import { useTheme } from './ui/theme-provider';
 import { lightTheme, darkTheme } from '../lib/themes';
 import { FaFilm, FaUserShield, FaMoneyBillWave, FaChartLine, FaShieldAlt, FaCogs } from 'react-icons/fa';
+import { useDispatch } from 'react-redux';
+import { logout } from '../redux/features/auth/auth';
 
 interface NavItem {
   title: string;
@@ -103,7 +105,7 @@ export const Sidebar = ({ isOpen, setIsOpen, userType, brandName = "MovieHub" }:
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
-  
+  const dispatch = useDispatch();
   // Choose the appropriate navigation items based on user type
   const getNavItems = () => {
     switch (userType) {
@@ -151,7 +153,7 @@ export const Sidebar = ({ isOpen, setIsOpen, userType, brandName = "MovieHub" }:
 
   const handleLogOut = () => {
     // Implement logout logic here
-    localStorage.removeItem('token');
+    dispatch(logout());
     navigate('/login');
   };
 

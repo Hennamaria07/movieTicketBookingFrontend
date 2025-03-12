@@ -4,6 +4,8 @@ import { Sun, Moon, Bell } from "lucide-react"
 import { cn } from "../lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { lightTheme, darkTheme } from "../lib/themes"
+import { useSelector } from "react-redux"
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 
 interface HeaderProps {
   isSidebarOpen: boolean
@@ -18,7 +20,8 @@ const headerVariants = {
 export const Header = ({ isSidebarOpen }: HeaderProps) => {
   const { theme, setTheme } = useTheme()
   const currentTheme = theme === 'dark' ? darkTheme : lightTheme
-
+  const getUserInfo = useSelector((state: any) => state.user.auth.userInfo);
+  console.log('get===>' , getUserInfo)
   return (
     <motion.header
       variants={headerVariants}
@@ -95,16 +98,10 @@ export const Header = ({ isSidebarOpen }: HeaderProps) => {
           className="flex items-center gap-3"
           whileHover={{ scale: 1.05 }}
         >
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center",
-              currentTheme.accent.primary
-            )}
-          >
-            <span className="text-sm font-medium text-white">JD</span>
-          </motion.div>
+           <Avatar>
+      <AvatarImage src={getUserInfo.avatar} alt={getUserInfo.firstName} />
+      <AvatarFallback>{getUserInfo?.firstName[0].toUpperCase()}{getUserInfo?.lastName[0].toUpperCase()}</AvatarFallback>
+    </Avatar>
           <AnimatePresence>
             <motion.div
               className="hidden md:block"
@@ -116,13 +113,13 @@ export const Header = ({ isSidebarOpen }: HeaderProps) => {
                 className={cn("text-sm font-medium", currentTheme.foreground)}
                 whileHover={{ y: -2 }}
               >
-                John Doe
+               {getUserInfo?.firstName} {getUserInfo?.lastName}
               </motion.p>
               <motion.p 
                 className={cn("text-xs", currentTheme.muted)}
                 whileHover={{ y: -2 }}
               >
-                john@example.com
+               {getUserInfo?.email}
               </motion.p>
             </motion.div>
           </AnimatePresence>
