@@ -35,6 +35,9 @@ const theaterDetailsSchema = yup.object({
   name: yup.string().required('Theater name is required'),
   location: yup.string().required('Location is required'),
   description: yup.string().required('Description is required'),
+  phone: yup.string()
+    .matches(/^\+?[1-9]\d{1,14}$/, 'Phone number must be a valid international format (e.g., +1234567890)')
+    .required('Phone number is required'),
 });
 
 const seatCategorySchema = yup.object({
@@ -65,6 +68,7 @@ interface TheaterDetails {
   name: string;
   location: string;
   description: string;
+  phone: string; // Added phone field
   image?: File | null;
   imagePreview?: string;
   imageUrl?: string;
@@ -131,6 +135,7 @@ const TheaterAdminSettings: React.FC = () => {
     name: '',
     location: '',
     description: '',
+    phone: '', // Added phone field
     image: null,
     imagePreview: '',
     imageUrl: '',
@@ -170,12 +175,13 @@ const TheaterAdminSettings: React.FC = () => {
       name: '',
       location: '',
       description: '',
+      phone: '', // Added phone field
     },
   });
 
   const { control: theaterControl, handleSubmit: handleTheaterSubmit, reset: resetTheaterForm } = theaterForm;
 
-  const addHallForm = useForm<Hall>({
+  const { control: addControl, handleSubmit: handleAddSubmit, watch: addWatch, setValue: setAddValue, reset: resetAddForm } = useForm<Hall>({
     resolver: yupResolver(hallSchema),
     defaultValues: {
       id: '',
@@ -190,7 +196,7 @@ const TheaterAdminSettings: React.FC = () => {
     },
   });
 
-  const editHallForm = useForm<Hall>({
+  const { control: editControl, handleSubmit: handleEditSubmit, reset: resetEditForm, watch: editWatch, setValue: setEditValue } = useForm<Hall>({
     resolver: yupResolver(hallSchema),
     defaultValues: {
       id: '',
@@ -204,9 +210,6 @@ const TheaterAdminSettings: React.FC = () => {
       specialSeats: [],
     },
   });
-
-  const { control: addControl, handleSubmit: handleAddSubmit, watch: addWatch, setValue: setAddValue, reset: resetAddForm } = addHallForm;
-  const { control: editControl, handleSubmit: handleEditSubmit, reset: resetEditForm, watch: editWatch, setValue: setEditValue } = editHallForm;
 
   const { fields: addSeatCategories, append: appendAddCategory, remove: removeAddCategory } = useFieldArray({ control: addControl, name: 'seatCategories' });
   const { fields: addSpecialSeats, append: appendAddSpecialSeat, remove: removeAddSpecialSeat } = useFieldArray({ control: addControl, name: 'specialSeats' });
@@ -241,6 +244,7 @@ const TheaterAdminSettings: React.FC = () => {
           name: theaterData?.name || '',
           location: theaterData?.location || '',
           description: theaterData?.description || '',
+          phone: theaterData?.phone || '', // Added phone field
           image: null,
           imagePreview: theaterData?.image?.url || '',
           imageUrl: theaterData?.image?.url || '',
@@ -249,6 +253,7 @@ const TheaterAdminSettings: React.FC = () => {
           name: theaterData.name || '',
           location: theaterData.location || '',
           description: theaterData.description || '',
+          phone: theaterData.phone || '', // Added phone field
         });
         setAmenities((prev) => ({
           ...prev,
@@ -316,6 +321,7 @@ const TheaterAdminSettings: React.FC = () => {
       data.append('name', formData.name);
       data.append('location', formData.location);
       data.append('description', formData.description);
+      data.append('phone', formData.phone); // Added phone field
       Object.entries(amenities).forEach(([key, value]) => {
         data.append(`amenities[${key}]`, String(value));
       });
@@ -617,10 +623,6 @@ const TheaterAdminSettings: React.FC = () => {
     }
   };
 
-  // if (loading) {
-  //   return <div className="text-center py-12">Loading theater settings...</div>;
-  // }
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 transition-colors duration-200">
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-7xl mx-auto space-y-6">
@@ -691,23 +693,43 @@ const TheaterAdminSettings: React.FC = () => {
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="description" className="text-slate-700 dark:text-slate-200">Description</Label>
-                        <Controller
-                          name="description"
-                          control={theaterControl}
-                          render={({ field, fieldState }) => (
-                            <>
-                              <Textarea
-                                id="description"
-                                {...field}
-                                rows={3}
-                                className="border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
-                              />
-                              {fieldState.error && <p className="text-red-500 text-xs">{fieldState.error.message}</p>}
-                            </>
-                          )}
-                        />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="phone" className="text-slate-700 dark:text-slate-200">Phone Number</Label>
+                          <Controller
+                            name="phone"
+                            control={theaterControl}
+                            render={({ field, fieldState }) => (
+                              <>
+                                <Input
+                                  id="phone"
+                                  {...field}
+                                  placeholder="+1234567890"
+                                  className="border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                                />
+                                {fieldState.error && <p className="text-red-500 text-xs">{fieldState.error.message}</p>}
+                              </>
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="description" className="text-slate-700 dark:text-slate-200">Description</Label>
+                          <Controller
+                            name="description"
+                            control={theaterControl}
+                            render={({ field, fieldState }) => (
+                              <>
+                                <Textarea
+                                  id="description"
+                                  {...field}
+                                  rows={3}
+                                  className="border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                                />
+                                {fieldState.error && <p className="text-red-500 text-xs">{fieldState.error.message}</p>}
+                              </>
+                            )}
+                          />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="image" className="text-slate-700 dark:text-slate-200">Theater Image</Label>

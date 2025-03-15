@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { 
   AiOutlineSearch, 
   AiOutlineEnvironment,
@@ -8,39 +9,53 @@ import {
   AiOutlineHeart,
   AiFillHeart,
   AiOutlinePhone
-} from 'react-icons/ai'
-import { BiCameraMovie } from 'react-icons/bi'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { cn } from '../../lib/utils'
-import { Skeleton } from '../../components/ui/skeleton'
-import { Badge } from '../../components/ui/badge'
-import { VoiceSearchButton } from '../../components/VoiceSearchButton'
+} from 'react-icons/ai';
+import { BiCameraMovie } from 'react-icons/bi';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { cn } from '../../lib/utils';
+import { Skeleton } from '../../components/ui/skeleton';
+import { Badge } from '../../components/ui/badge';
+import { API_GET_ALL_THEATERS_URL } from '../../utils/api';
+import { VoiceSearchButton } from '../../components/VoiceSearchButton';
 
 interface Theater {
-  id: string
-  name: string
-  location: string
-  distance: string
-  rating: number
-  screens: string[]
-  amenities: string[]
-  image: string
+  _id: string;
+  name: string;
+  location: string;
+  description: string;
+  totalSeats: number;
+  availableSeats: number;
+  status: 'Active' | 'Inactive' | 'Banned';
+  screens: { _id: string; hallName: string }[];
+  shows: string[];
+  image: {
+    publicId: string;
+    url: string;
+  };
+  phone?: string; // Made optional with ?
+  amenities: {
+    cafe: boolean;
+    wifi: boolean;
+    accessibility: boolean;
+    premium: boolean;
+    snackBar: boolean;
+    recliners: boolean;
+    dolbyAtmos: boolean;
+    imax: boolean;
+    threeD: boolean;
+    fourDX: boolean;
+    laserProjection: boolean;
+  };
 }
 
-const mockTheaters: Theater[] = [
-  {
-    id: '1',
-    name: 'Cineplex Deluxe',
-    location: '123 Movie St, Cinema City',
-    distance: '2.5 km',
-    rating: 4.5,
-    screens: ['IMAX', '3D', 'Dolby Atmos'],
-    amenities: ['Parking', 'Food Court', 'Wheelchair Access'],
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c'
-  },
-  // Add more theaters...
-]
+const api = axios.create({
+  baseURL: 'http://localhost:5000',
+  headers: {
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+  }
+});
 
 const amenityFilters = [
   'IMAX',
@@ -48,48 +63,71 @@ const amenityFilters = [
   'Dolby Atmos',
   'Parking',
   'Food Court',
-  'Wheelchair Access'
-]
+  'Wheelchair Access',
+  'Recliners',
+  '4DX',
+  'Laser Projection'
+];
+
+const formatPhoneNumber = (phone?: string): string => {
+  if (!phone || typeof phone !== 'string') return 'Not available';
+  const cleaned = phone.replace(/\D/g, '');
+  const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+  if (match) {
+    return `(${match[1]}) ${match[2]}-${match[3]}`;
+  }
+  return phone;
+};
 
 const Theaters = () => {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
-  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
-  const { data: theaters, isLoading } = useQuery({
+  const { data: theaters, isLoading } = useQuery<Theater[]>({
     queryKey: ['theaters'],
     queryFn: async () => {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      return mockTheaters
-    }
-  })
+      const response = await api.get(API_GET_ALL_THEATERS_URL);
+      console.log(response, '<===')
+      return response.data.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 10 * 60 * 1000,
+  });
 
   const filteredTheaters = theaters?.filter(theater => {
-    const matchesSearch = theater.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase()) ||
-      theater.location.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = theater.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      theater.location.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesAmenities = selectedAmenities.length === 0 ||
-      selectedAmenities.every(amenity => 
-        theater.screens.includes(amenity) || theater.amenities.includes(amenity)
-      )
+      selectedAmenities.every(amenity => {
+        switch (amenity) {
+          case 'IMAX': return theater.amenities.imax;
+          case '3D': return theater.amenities.threeD;
+          case 'Dolby Atmos': return theater.amenities.dolbyAtmos;
+          case 'Parking': return theater.amenities.wifi;
+          case 'Food Court': return theater.amenities.cafe || theater.amenities.snackBar;
+          case 'Wheelchair Access': return theater.amenities.accessibility;
+          case 'Recliners': return theater.amenities.recliners;
+          case '4DX': return theater.amenities.fourDX;
+          case 'Laser Projection': return theater.amenities.laserProjection;
+          default: return false;
+        }
+      });
     
-    return matchesSearch && matchesAmenities
-  })
+    return matchesSearch && matchesAmenities;
+  });
 
   const toggleAmenity = (amenity: string) => {
     setSelectedAmenities(prev => 
       prev.includes(amenity)
         ? prev.filter(a => a !== amenity)
         : [...prev, amenity]
-    )
-  }
+    );
+  };
 
   return (
     <div className="max-w-screen min-h-screen pt-4">
-      {/* Search Bar */}
       <div className="relative mb-6">
         <AiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -104,7 +142,6 @@ const Theaters = () => {
         />
       </div>
 
-      {/* Amenities and View Toggle */}
       <div className="flex flex-col sm:flex-row sm:justify-between gap-4 mb-6">
         <div className="space-y-3">
           <h3 className="font-semibold">Amenities</h3>
@@ -123,7 +160,6 @@ const Theaters = () => {
           </div>
         </div>
 
-        {/* View Toggle - Only visible on tablet and larger screens */}
         <div className="hidden sm:flex gap-2 justify-end mb-6">
           <Button
             variant={view === 'grid' ? 'default' : 'outline'}
@@ -142,12 +178,9 @@ const Theaters = () => {
         </div>
       </div>
 
-      {/* Theaters Grid/List */}
       <div className={cn(
         "grid gap-4 md:gap-6",
-        // Mobile: always grid
         "grid-cols-1",
-        // Tablet and up: respect view toggle
         view === 'list' 
           ? "sm:grid-cols-1" 
           : "sm:grid-cols-2 lg:grid-cols-3"
@@ -161,11 +194,27 @@ const Theaters = () => {
                 className="sm:flex-row"
               />
             ))
+          ) : filteredTheaters?.length === 0 ? (
+            <div className="col-span-full text-center text-muted-foreground">
+              No theaters found matching your criteria.
+            </div>
           ) : (
-            filteredTheaters?.map((theater) => (
+            filteredTheaters?.map((theater: any) => (
               <TheaterCard 
-                key={theater.id} 
-                theater={theater}
+                key={theater._id} 
+                theater={{
+                  id: theater._id,
+                  name: theater.name,
+                  location: theater.location,
+                  distance: 'N/A',
+                  rating: 4.5,
+                  screens: theater.screens.map(screen => screen.hallName),
+                  amenities: Object.entries(theater.amenities)
+                    .filter(([_, value]) => value)
+                    .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1)),
+                  image: theater.image?.url || 'https://via.placeholder.com/300x200',
+                  phone: theater.phone
+                }}
                 view={view}
                 className="sm:flex-row"
               />
@@ -174,17 +223,42 @@ const Theaters = () => {
         </AnimatePresence>
       </div>
     </div>
-  )
-}
+  );
+};
 
 interface TheaterCardProps {
-  theater: Theater
-  view: 'grid' | 'list'
-  className?: string
+  theater: {
+    id: string;
+    name: string;
+    location: string;
+    distance: string;
+    rating: number;
+    screens: string[];
+    amenities: string[];
+    image: string;
+    phone?: string; // Made optional with ?
+  };
+  view: 'grid' | 'list';
+  className?: string;
 }
 
 const TheaterCard = ({ theater, view, className }: TheaterCardProps) => {
-  const [isWatchlisted, setIsWatchlisted] = useState(false)
+  const [isWatchlisted, setIsWatchlisted] = useState(false);
+console.log(theater, '<===')
+  const handlePhoneClick = () => {
+    if (!theater.phone) {
+      alert('Phone number not available for this theater');
+      return;
+    }
+    // const cleanPhone = theater.phone.replace(/\D/g, '');
+    // if (cleanPhone.length < 7) {
+    //   alert('Invalid phone number');
+    //   return;
+    // }
+    if (window.confirm(`Call ${(theater.phone)}?`)) {
+      window.location.href = `tel:${theater.phone}`;
+    }
+  };
 
   return (
     <motion.div
@@ -233,6 +307,10 @@ const TheaterCard = ({ theater, view, className }: TheaterCardProps) => {
             <span>{theater.location}</span>
           </div>
           <div className="flex items-center gap-2">
+            <AiOutlinePhone className="h-4 w-4 shrink-0" />
+            <span>{theater.phone}</span>
+          </div>
+          <div className="flex items-center gap-2">
             <BiCameraMovie className="h-4 w-4 shrink-0" />
             <div className="flex flex-wrap gap-1">
               {theater.screens.map(screen => (
@@ -245,18 +323,23 @@ const TheaterCard = ({ theater, view, className }: TheaterCardProps) => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button className="flex-1">View Showtimes</Button>
-          <Button variant="outline" size="icon">
+          <Button className="flex-1">View List of Shows</Button>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={handlePhoneClick}
+            title={theater.phone ? `Call ${formatPhoneNumber(theater.phone)}` : 'Phone not available'}
+          >
             <AiOutlinePhone className="h-4 w-4" />
           </Button>
         </div>
       </div>
     </motion.div>
-  )
-}
+  );
+};
 
 const TheaterCardSkeleton = ({ view, className }: { 
-  view: 'grid' | 'list'
+  view: 'grid' | 'list';
   className?: string 
 }) => (
   <div className={cn(
@@ -279,6 +362,6 @@ const TheaterCardSkeleton = ({ view, className }: {
       </div>
     </div>
   </div>
-)
+);
 
-export default Theaters 
+export default Theaters;

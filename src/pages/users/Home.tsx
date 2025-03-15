@@ -3,13 +3,12 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { 
   Play, Calendar, Clock, ChevronRight, 
-   Users, MessageCircle, Copy, Check 
+  Users, MessageCircle, Copy, Check 
 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../../components/ui/button"
 import { cn } from "../../lib/utils"
-import { Movie, Offer } from "../../types/movie"
-import { nowShowingMovies, comingSoonMovies, offers, bannerImages } from "../../data/mockData"
+import { MovieCard } from "../../components/cards/MovieCard"
 import {
   Tooltip,
   TooltipContent,
@@ -17,7 +16,44 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltips"
 import { Skeleton } from "../../components/ui/skeleton"
-import { MovieCard } from "../../components/cards/MovieCard"
+import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL } from "../../utils/api"
+import axios from 'axios'
+
+// Define Movie interface based on Showtime schema
+interface Movie {
+  _id: string;
+  showName: string;
+  Date: string;
+  startTime: string;
+  endTime: string;
+  theaterId: { _id: string; name: string };
+  screenId: { _id: string; hallName: string };
+  totalSeats: number;
+  avaliableSeats: number;
+  status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
+  image?: {
+    publicId: string;
+    url: string;
+  };
+  genre: string[];
+}
+
+interface Offer {
+  id: string;
+  title: string;
+  description: string;
+  code: string;
+  gradient: string;
+}
+
+// Function to convert 24-hour time to 12-hour format with AM/PM
+const formatTimeTo12Hour = (time: string): string => {
+  const [hours, minutes] = time.split(':');
+  const hourNum = parseInt(hours, 10);
+  const period = hourNum >= 12 ? 'PM' : 'AM';
+  const adjustedHour = hourNum % 12 || 12; // Convert 0 or 12 to 12
+  return `${adjustedHour}:${minutes} ${period}`;
+}
 
 const fadeInUp = {
   initial: { y: 20, opacity: 0 },
@@ -25,23 +61,37 @@ const fadeInUp = {
   transition: { duration: 0.5 }
 }
 
+const api = axios.create({
+  baseURL: 'http://localhost:5000', // Adjust base URL as needed
+  headers: {
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+  }
+})
+
 const Home = () => {
   const [loading, setLoading] = useState(true)
   const [activeMovies, setActiveMovies] = useState<Movie[]>([])
   const [upcomingMovies, setUpcomingMovies] = useState<Movie[]>([])
-  const [currentOffers, setCurrentOffers] = useState<Offer[]>([])
+  const [currentOffers] = useState<Offer[]>([]) // Keeping offers as static for now
   const navigate = useNavigate()
   const [imagesLoaded, setImagesLoaded] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setActiveMovies(nowShowingMovies)
-        setUpcomingMovies(comingSoonMovies)
-        setCurrentOffers(offers)
-      } catch {
+        // Fetch ongoing shows
+        const ongoingResponse = await api.get(API_GET_ALL_ONGOING_SHOWS_URL)
+        const ongoingData = ongoingResponse.data.data.slice(0, 4) // Get first 4
+        setActiveMovies(ongoingData)
+
+        // Fetch upcoming shows
+        const upcomingResponse = await api.get(API_GET_ALL_UPCOMING_SHOWS_URL)
+        const upcomingData = upcomingResponse.data.data.slice(0, 4) // Get first 4
+        setUpcomingMovies(upcomingData)
+
+      } catch (error) {
+        console.error('Error fetching movies:', error)
         toast.error("Failed to fetch movies and offers")
       } finally {
         setLoading(false)
@@ -51,20 +101,22 @@ const Home = () => {
     fetchData()
   }, [])
 
-  // Preload images
+  // Preload images (using active movies as banner images)
   useEffect(() => {
     const loadImages = async () => {
       try {
-        await Promise.all(
-          bannerImages.map((image) => {
-            return new Promise((resolve, reject) => {
-              const img = new Image()
-              img.src = `https://image.tmdb.org/t/p/original${image.backdropPath}`
-              img.onload = resolve
-              img.onerror = reject
+        if (activeMovies.length > 0) {
+          await Promise.all(
+            activeMovies.map((movie) => {
+              return new Promise((resolve, reject) => {
+                const img = new Image()
+                img.src = movie.image?.url || 'https://via.placeholder.com/1920x1080'
+                img.onload = resolve
+                img.onerror = reject
+              })
             })
-          })
-        )
+          )
+        }
         setImagesLoaded(true)
       } catch (error) {
         console.error('Failed to load banner images:', error)
@@ -72,13 +124,14 @@ const Home = () => {
       }
     }
 
-    loadImages()
-  }, [])
+    if (activeMovies.length > 0) {
+      loadImages()
+    }
+  }, [activeMovies])
 
   const handleBooking = (movieId: string) => {
     navigate(`/booking/${movieId}`)
   }
-
 
   const handleCreateParty = () => {
     navigate("/watch-party/create")
@@ -96,11 +149,11 @@ const Home = () => {
       <section className="relative h-[500px] -mt-6 -mx-6 overflow-hidden">
         {/* Movie Backdrop Slider */}
         <AnimatePresence>
-          {imagesLoaded && (
+          {imagesLoaded && activeMovies.length > 0 && (
             <div className="absolute inset-0">
-              {bannerImages.map((movie, index) => (
+              {activeMovies.map((movie, index) => (
                 <motion.div
-                  key={movie.id}
+                  key={movie._id}
                   className="absolute inset-0"
                   initial={{ opacity: index === 0 ? 1 : 0 }}
                   animate={{ 
@@ -111,13 +164,13 @@ const Home = () => {
                     duration: 8,
                     delay: index * 8,
                     repeat: Infinity,
-                    repeatDelay: (bannerImages.length - 1) * 8,
+                    repeatDelay: (activeMovies.length - 1) * 8,
                     ease: "easeInOut"
                   }}
                 >
                   <img 
-                    src={`https://image.tmdb.org/t/p/original${movie.backdropPath}`}
-                    alt={movie.title}
+                    src={movie.image?.url || 'https://via.placeholder.com/1920x1080'}
+                    alt={movie.showName}
                     className="w-full h-full object-cover object-center"
                   />
                   <div className="absolute inset-0 bg-black/40" />
@@ -129,9 +182,9 @@ const Home = () => {
 
         {/* Floating Movie Elements */}
         <div className="absolute inset-0 hidden md:flex">
-          {bannerImages.map((movie, i) => (
+          {activeMovies.map((movie, i) => (
             <motion.div
-              key={movie.id}
+              key={movie._id}
               className="absolute w-32 h-48 rounded-lg overflow-hidden shadow-2xl"
               style={{
                 left: `${15 + i * 30}%`,
@@ -150,39 +203,14 @@ const Home = () => {
               }}
             >
               <img 
-                src={`https://image.tmdb.org/t/p/w500${movie.posterPath}`}
-                alt={movie.title}
+                src={movie.image?.url || 'https://via.placeholder.com/300x400'}
+                alt={movie.showName}
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
             </motion.div>
           ))}
         </div>
-
-        {/* Animated Circles */}
-        {/* <div className="absolute inset-0">
-          {[1, 2, 3, 4].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute rounded-full border-2 border-white/20"
-              style={{
-                width: `${100 + i * 40}px`,
-                height: `${100 + i * 40}px`,
-                left: `${70 + i * 5}%`,
-                top: `${30 + i * 5}%`,
-              }}
-              animate={{
-                rotate: [0, 360],
-                scale: [1, 1.1, 1],
-              }}
-              transition={{
-                duration: 10 + i * 2,
-                repeat: Infinity,
-                ease: "linear"
-              }}
-            />
-          ))}
-        </div> */}
 
         {/* Sparkles */}
         <div className="absolute inset-0">
@@ -269,17 +297,24 @@ const Home = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <AnimatePresence mode="wait">
             {loading ? (
-              // Add loading skeletons here
               Array(4).fill(0).map((_, i) => (
                 <MovieCardSkeleton key={i} />
               ))
             ) : (
               activeMovies.map((movie) => (
                 <MovieCard 
-                  key={movie.id} 
-                  movie={movie} 
+                  key={movie._id} 
+                  movie={{
+                    id: movie._id,
+                    title: movie.showName,
+                    genre: movie.genre,
+                    poster: movie.image?.url || 'https://via.placeholder.com/300x400',
+                    rating: 0, // Add rating logic if available
+                    duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
+                    releaseDate: new Date(movie.Date).toLocaleDateString(),
+                  }} 
                   variant="simple" 
-                  onBook={() => handleBooking(movie.id)}
+                  onBook={() => handleBooking(movie._id)}
                 />
               ))
             )}
@@ -296,9 +331,30 @@ const Home = () => {
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((movie) => (
-            <ComingSoonCard key={movie} />
-          ))}
+          <AnimatePresence mode="wait">
+            {loading ? (
+              Array(4).fill(0).map((_, i) => (
+                <MovieCardSkeleton key={i} />
+              ))
+            ) : (
+              upcomingMovies.map((movie) => (
+                <MovieCard 
+                  key={movie._id} 
+                  movie={{
+                    id: movie._id,
+                    title: movie.showName,
+                    genre: movie.genre,
+                    poster: movie.image?.url || 'https://via.placeholder.com/300x400',
+                    rating: 0,
+                    duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
+                    releaseDate: new Date(movie.Date).toLocaleDateString(),
+                  }} 
+                  variant="simple" 
+                  onBook={() => handleBooking(movie._id)}
+                />
+              ))
+            )}
+          </AnimatePresence>
         </div>
       </section>
 
@@ -363,28 +419,6 @@ const MovieCardSkeleton = () => (
       <Skeleton className="h-10 w-full" />
     </div>
   </div>
-)
-
-const ComingSoonCard = () => (
-  <motion.div 
-    className="group relative bg-card rounded-lg overflow-hidden"
-    whileHover={{ y: -5 }}
-  >
-    <div className="aspect-[2/3] bg-muted" />
-    <div className="p-4">
-      <h3 className="font-semibold mb-1">Upcoming Movie</h3>
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-        <span className="flex items-center">
-          <Calendar className="h-4 w-4 mr-1" /> Dec 25
-        </span>
-        <span>•</span>
-        <span className="flex items-center">
-          <Clock className="h-4 w-4 mr-1" /> 2h 15m
-        </span>
-      </div>
-      <Button variant="outline" className="w-full">Notify Me</Button>
-    </div>
-  </motion.div>
 )
 
 interface OfferCardProps {

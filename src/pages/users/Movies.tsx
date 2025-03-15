@@ -1,58 +1,115 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { 
   AiOutlineSearch, 
-} from 'react-icons/ai'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { cn } from '../../lib/utils'
-import { Skeleton } from '../../components/ui/skeleton'
-import { nowShowingMovies } from '../../data/mockData'
-import { MovieCard } from "../../components/cards/MovieCard"
-import { VoiceSearchButton } from '../../components/VoiceSearchButton'
+} from 'react-icons/ai';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { cn } from '../../lib/utils';
+import { Skeleton } from '../../components/ui/skeleton';
+import { MovieCard } from "../../components/cards/MovieCard";
+import { VoiceSearchButton } from '../../components/VoiceSearchButton';
+import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL } from '../../utils/api';
 
 const tabs = [
   { id: 'now-showing', label: 'Now Showing' },
   { id: 'coming-soon', label: 'Coming Soon' },
   { id: 'trending', label: 'Trending' },
-]
+];
 
 const genres = [
   'Action', 'Comedy', 'Drama', 'Horror', 'Romance', 
-  'Sci-Fi', 'Thriller', 'Documentary'
-]
+  'Sci-Fi', 'Thriller', 'Documentary', 'Adventure', 'Fantasy', 'Animation'
+];
+
+// Define the Movie interface based on your Showtime schema
+interface Movie {
+  _id: string;
+  showName: string;
+  Date: string;
+  startTime: string;
+  endTime: string;
+  theaterId: { _id: string; name: string };
+  screenId: { _id: string; hallName: string };
+  totalSeats: number;
+  avaliableSeats: number;
+  status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
+  image?: {
+    publicId: string;
+    url: string;
+  };
+  genre: string[];
+}
+
+// Function to convert 24-hour time to 12-hour format with AM/PM
+const formatTimeTo12Hour = (time: string): string => {
+  const [hours, minutes] = time.split(':');
+  const hourNum = parseInt(hours, 10);
+  const period = hourNum >= 12 ? 'PM' : 'AM';
+  const adjustedHour = hourNum % 12 || 12; // Convert 0 or 12 to 12
+  return `${adjustedHour}:${minutes} ${period}`;
+}
+
+const api = axios.create({
+  baseURL: 'http://localhost:5000', // Adjust base URL as needed
+  headers: {
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+  }
+});
 
 const Movies = () => {
-  const [activeTab, setActiveTab] = useState('now-showing')
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('now-showing');
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: movies, isLoading } = useQuery({
+  const { data: movies, isLoading } = useQuery<Movie[]>({
     queryKey: ['movies', activeTab],
     queryFn: async () => {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      return nowShowingMovies
-    }
-  })
+      let url = '';
+      switch (activeTab) {
+        case 'now-showing':
+          url = API_GET_ALL_ONGOING_SHOWS_URL;
+          break;
+        case 'coming-soon':
+          url = API_GET_ALL_UPCOMING_SHOWS_URL;
+          break;
+        case 'trending':
+          // For now, we'll use ongoing shows for trending as an example
+          // You might want to add a specific trending endpoint later
+          url = API_GET_ALL_ONGOING_SHOWS_URL;
+          break;
+        default:
+          url = API_GET_ALL_ONGOING_SHOWS_URL;
+      }
+
+      const response = await api.get(url);
+      console.log(response, '<===');
+      // Assuming the API returns an array of shows directly
+      return response.data.data;
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+  });
 
   const filteredMovies = movies?.filter(movie => {
     const matchesGenre = selectedGenres.length === 0 || 
-      movie.genre.some(g => selectedGenres.includes(g))
-    const matchesSearch = movie.title
+      movie.genre.some(g => selectedGenres.includes(g));
+    const matchesSearch = movie.showName
       .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-    return matchesGenre && matchesSearch
-  })
+      .includes(searchQuery.toLowerCase());
+    return matchesGenre && matchesSearch;
+  });
 
   const toggleGenre = (genre: string) => {
     setSelectedGenres(prev => 
       prev.includes(genre)
         ? prev.filter(g => g !== genre)
         : [...prev, genre]
-    )
-  }
+    );
+  };
 
   return (
     <div className="max-w-screen min-h-screen pt-4">
@@ -120,16 +177,33 @@ const Movies = () => {
             Array(8).fill(0).map((_, i) => (
               <MovieCardSkeleton key={i} />
             ))
+          ) : filteredMovies?.length === 0 ? (
+            <div className="col-span-full text-center text-muted-foreground">
+              No movies found matching your criteria.
+            </div>
           ) : (
             filteredMovies?.map((movie) => (
-              <MovieCard key={movie.id} movie={movie} variant="default" />
+              <MovieCard 
+                key={movie._id} 
+                movie={{
+                  id: movie._id,
+                  title: movie.showName,
+                  genre: movie.genre,
+                  poster: movie.image?.url || 'https://via.placeholder.com/300x400',
+                  rating: 0, // Add rating logic if available in API
+                  duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
+                  releaseDate: new Date(movie.Date).toLocaleDateString(),
+                  // Add other fields as needed for MovieCard
+                }} 
+                variant="default" 
+              />
             ))
           )}
         </AnimatePresence>
       </div>
     </div>
-  )
-}
+  );
+};
 
 const MovieCardSkeleton = () => (
   <div className="bg-card rounded-lg overflow-hidden">
@@ -143,6 +217,6 @@ const MovieCardSkeleton = () => (
       </div>
     </div>
   </div>
-)
+);
 
-export default Movies
+export default Movies;

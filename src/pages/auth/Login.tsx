@@ -92,6 +92,7 @@ const LoginForm = () => {
     try {
       setIsLoading(true);
       const response = await authService.login(data);
+      console.log(response, "<======response")
       login(response.token);
       dispatch(addAuth({
         isAuthenticated: true,

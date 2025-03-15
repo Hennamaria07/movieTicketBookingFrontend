@@ -12,6 +12,8 @@ import { Input } from '../../components/ui/input';
 import { Search } from 'lucide-react';
 import { API_DELETE_THEATER_SHOW_URL, API_ADD_THEATER_SHOW_URL, API_UPDATE_THEATER_SHOW_URL, API_GET_ALL_THEATER_SHOW_URL, API_ALL_THEATER_HALLS_URL } from '../../utils/api';
 import { Toaster, toast } from 'sonner';
+import { Label } from '../../components/ui/Label';
+import { Checkbox } from '../../components/ui/checkbox';
 
 // Interfaces
 interface Show {
@@ -25,6 +27,11 @@ interface Show {
     totalSeats: number;
     avaliableSeats: number;
     status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
+    image?: {
+        publicId: string;
+        url: string;
+    };
+    genre: string[];
 }
 
 interface FormData {
@@ -35,6 +42,8 @@ interface FormData {
     theaterId: string;
     screenId: string;
     status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
+    image?: File | null;
+    genre: string[];
 }
 
 interface SortConfig {
@@ -52,7 +61,6 @@ interface Screen {
 const api = axios.create({
     baseURL: 'http://localhost:5000',
     headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
     }
 });
@@ -117,10 +125,19 @@ const ManageShowsPage: React.FC = () => {
         endTime: '',
         theaterId: '',
         screenId: '',
-        status: 'avaliable'
+        status: 'avaliable',
+        image: null,
+        genre: []
     });
     const [loading, setLoading] = useState<boolean>(false);
     const [screensLoading, setScreensLoading] = useState<boolean>(false);
+    const [updateImage, setUpdateImage] = useState<boolean>(false);
+
+    // Predefined genre options
+    const genreOptions = [
+        'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance', 
+        'Thriller', 'Adventure', 'Fantasy', 'Animation', 'Documentary'
+    ];
 
     useEffect(() => {
         fetchShows();
@@ -193,8 +210,8 @@ const ManageShowsPage: React.FC = () => {
             sortableShows.sort((a, b) => {
                 const aValue = sortConfig.key === 'screenId' ? a.screenId.hallName : a[sortConfig.key!];
                 const bValue = sortConfig.key === 'screenId' ? b.screenId.hallName : b[sortConfig.key!];
-                if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+                if (aValue! < bValue!) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aValue! > bValue!) return sortConfig.direction === 'ascending' ? 1 : -1;
                 return 0;
             });
         }
@@ -219,26 +236,56 @@ const ManageShowsPage: React.FC = () => {
         setFormData({ ...formData, [name]: value });
     };
 
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setFormData({ ...formData, image: file });
+    };
+
+    const handleGenreChange = (genre: string, checked: boolean) => {
+        if (checked) {
+            setFormData({ ...formData, genre: [...formData.genre, genre] });
+        } else {
+            setFormData({ ...formData, genre: formData.genre.filter(g => g !== genre) });
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             setLoading(true);
-            const showData = {
-                ...formData,
-                theaterId: screens.length > 0 ? screens[0].theaterId : ''
-            };
+            const formDataToSend = new FormData();
+            formDataToSend.append('showName', formData.showName);
+            formDataToSend.append('Date', formData.Date);
+            formDataToSend.append('startTime', formData.startTime);
+            formDataToSend.append('endTime', formData.endTime);
+            formDataToSend.append('theaterId', screens.length > 0 ? screens[0].theaterId : '');
+            formDataToSend.append('screenId', formData.screenId);
+            formDataToSend.append('status', formData.status);
+            if (formData.image) {
+                formDataToSend.append('image', formData.image);
+            }
+            formDataToSend.append('genre', JSON.stringify(formData.genre));
 
             if (editingShow) {
-                await api.put(`${API_UPDATE_THEATER_SHOW_URL}/${editingShow._id}`, showData);
+                await axios.put(`${API_UPDATE_THEATER_SHOW_URL}/${editingShow._id}`, formDataToSend, {
+                    headers: { 'Content-Type': 'multipart/form-data',
+                         'Authorization': `Bearer ${localStorage.getItem('token')}`
+                     }
+                });
                 toast.success('Show updated successfully');
             } else {
-                await api.post(API_ADD_THEATER_SHOW_URL, showData);
+                await axios.post(API_ADD_THEATER_SHOW_URL, formDataToSend, {
+                    headers: { 'Content-Type': 'multipart/form-data',
+                         'Authorization': `Bearer ${localStorage.getItem('token')}`
+                     }
+                });
                 toast.success('Show added successfully');
             }
             
             await fetchShows();
             setIsModalOpen(false);
             setEditingShow(null);
+            setUpdateImage(false);
             setFormData({
                 showName: '',
                 Date: '',
@@ -246,7 +293,9 @@ const ManageShowsPage: React.FC = () => {
                 endTime: '',
                 theaterId: '',
                 screenId: '',
-                status: 'avaliable'
+                status: 'avaliable',
+                image: null,
+                genre: []
             });
         } catch (err) {
             toast.error('Failed to save show');
@@ -265,15 +314,17 @@ const ManageShowsPage: React.FC = () => {
             endTime: show.endTime,
             theaterId: show.theaterId._id,
             screenId: show.screenId._id,
-            status: show.status
+            status: show.status,
+            image: null,
+            genre: show.genre
         });
+        setUpdateImage(false);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id: string) => {
         try {
             setLoading(true);
-            console.log(API_DELETE_THEATER_SHOW_URL);
             await api.delete(`${API_DELETE_THEATER_SHOW_URL}/${id}`);
             toast.success('Show deleted successfully');
             await fetchShows();
@@ -294,8 +345,11 @@ const ManageShowsPage: React.FC = () => {
             endTime: '',
             theaterId: screens.length > 0 ? screens[0].theaterId : '',
             screenId: screens.length > 0 ? screens[0]._id : '',
-            status: 'avaliable'
+            status: 'avaliable',
+            image: null,
+            genre: []
         });
+        setUpdateImage(false);
         setIsModalOpen(true);
     };
 
@@ -307,12 +361,13 @@ const ManageShowsPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 transition-colors duration-200">
-            {/* Add Toaster component at the root */}
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
             <Toaster position="top-right" richColors />
             
+            {loading && <div className="text-center py-4">Loading...</div>}
+            
             <motion.div
-                className="max-w-7xl mx-auto space-y-6"
+                className="max-w-full mx-auto space-y-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ staggerChildren: 0.1 }}
@@ -331,7 +386,7 @@ const ManageShowsPage: React.FC = () => {
                     </Button>
                 </motion.div>
 
-                <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <motion.div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -373,7 +428,7 @@ const ManageShowsPage: React.FC = () => {
                     </Card>
                 </motion.div>
 
-                <motion.div>
+                <motion.div className="w-full">
                     <Card>
                         <CardContent className="p-4">
                             <div className="flex flex-col gap-4">
@@ -415,19 +470,25 @@ const ManageShowsPage: React.FC = () => {
                     </Card>
                 </motion.div>
 
-                <motion.div>
+                <motion.div className="w-full">
                     <div className="md:hidden space-y-4">
                         {sortedShows.map((show) => (
                             <Card key={show._id} className="p-4">
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-start">
-                                        <h3 className="font-medium text-slate-900 dark:text-white">{show.showName}</h3>
+                                        <h3 className="font-medium text-slate-900 dark:text-white truncate">{show.showName}</h3>
                                         <StatusBadge status={show.status} />
                                     </div>
                                     <div className="text-sm text-slate-500 dark:text-slate-400">
                                         <p>{new Date(show.Date).toLocaleDateString()} • {show.startTime}</p>
                                         <p>{show.screenId.hallName}</p>
                                         <p>{show.avaliableSeats}/{show.totalSeats}</p>
+                                        {show.genre.length > 0 && (
+                                            <p>Genres: {show.genre.join(', ')}</p>
+                                        )}
+                                        {show.image?.url && (
+                                            <img src={show.image.url} alt={show.showName} className="w-16 h-16 object-cover rounded" />
+                                        )}
                                     </div>
                                     <div className="flex justify-end gap-2">
                                         <Button variant="outline" size="sm" onClick={() => handleEdit(show)}>
@@ -442,50 +503,53 @@ const ManageShowsPage: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="hidden md:block bg-white dark:bg-[hsl(0,0%,3.9%)] rounded-lg shadow-sm border overflow-hidden">
-                        <table className="w-full">
-                            <thead className="bg-slate-50 dark:bg-zinc-950 border-b">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer" onClick={() => requestSort('showName')}>
-                                        <div className="flex items-center">Show {getSortIcon('showName')}</div>
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer" onClick={() => requestSort('Date')}>
-                                        <div className="flex items-center">Date {getSortIcon('Date')}</div>
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Time</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer" onClick={() => requestSort('screenId')}>
-                                        <div className="flex items-center">Screen {getSortIcon('screenId')}</div>
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Capacity</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                                {sortedShows.map((show) => (
-                                    <motion.tr key={show._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                        <td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white">{show.showName}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{new Date(show.Date).toLocaleDateString()}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{show.startTime} - {show.endTime}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{show.screenId.hallName}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                                            {show.avaliableSeats}/{show.totalSeats}
-                                        </td>
-                                        <td className="px-4 py-3"><StatusBadge status={show.status} /></td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(show)}>
-                                                    <FiEdit className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(show._id)}>
-                                                    <FiTrash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </motion.tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div className="hidden md:block w-full overflow-x-auto">
+                        <div className="bg-white dark:bg-[hsl(0,0%,3.9%)] rounded-lg shadow-sm border min-w-[768px]">
+                            <table className="w-full">
+                                <thead className="bg-slate-50 dark:bg-zinc-950 border-b">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer min-w-[150px]" onClick={() => requestSort('showName')}>
+                                            <div className="flex items-center">Show {getSortIcon('showName')}</div>
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer min-w-[120px]" onClick={() => requestSort('Date')}>
+                                            <div className="flex items-center">Date {getSortIcon('Date')}</div>
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[120px]">Time</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer min-w-[120px]" onClick={() => requestSort('screenId')}>
+                                            <div className="flex items-center">Screen {getSortIcon('screenId')}</div>
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[100px]">Capacity</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[100px]">Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[120px]">Genres</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[100px]">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                    {sortedShows.map((show) => (
+                                        <motion.tr key={show._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                            <td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{show.showName}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{new Date(show.Date).toLocaleDateString()}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{show.startTime} - {show.endTime}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{show.screenId.hallName}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{show.avaliableSeats}/{show.totalSeats}</td>
+                                            <td className="px-4 py-3"><StatusBadge status={show.status} /></td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{show.genre.join(', ')}</td>
+                                           
+                                            <td className="px-4 py-3 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(show)}>
+                                                        <FiEdit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(show._id)}>
+                                                        <FiTrash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </motion.div>
 
@@ -514,9 +578,9 @@ const ManageShowsPage: React.FC = () => {
                                     </Button>
                                 </div>
 
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                                <form onSubmit={handleSubmit} className="space-y-4" encType="multipart/form-data">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Show Name</label>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Show Name</Label>
                                         <Input
                                             name="showName"
                                             value={formData.showName}
@@ -527,7 +591,7 @@ const ManageShowsPage: React.FC = () => {
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Date</label>
+                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Date</Label>
                                             <Input
                                                 type="date"
                                                 name="Date"
@@ -537,7 +601,7 @@ const ManageShowsPage: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Start Time</label>
+                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Start Time</Label>
                                             <Input
                                                 type="time"
                                                 name="startTime"
@@ -547,7 +611,7 @@ const ManageShowsPage: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">End Time</label>
+                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">End Time</Label>
                                             <Input
                                                 type="time"
                                                 name="endTime"
@@ -559,7 +623,7 @@ const ManageShowsPage: React.FC = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Screen</label>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Screen</Label>
                                         {screensLoading ? (
                                             <div>Loading screens...</div>
                                         ) : screens.length === 0 ? (
@@ -587,7 +651,7 @@ const ManageShowsPage: React.FC = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Status</Label>
                                         <Select 
                                             value={formData.status} 
                                             onValueChange={(value: any) => setFormData({ ...formData, status: value })}
@@ -602,6 +666,65 @@ const ManageShowsPage: React.FC = () => {
                                                 <SelectItem value="cancelled">Cancelled</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                    </div>
+
+                                    <div>
+                                        {editingShow ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id="updateImage"
+                                                        checked={updateImage}
+                                                        onCheckedChange={(checked) => setUpdateImage(checked as boolean)}
+                                                    />
+                                                    <Label htmlFor="updateImage" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                        Update Image
+                                                    </Label>
+                                                </div>
+                                                {updateImage && (
+                                                    <Input
+                                                        type="file"
+                                                        name="image"
+                                                        accept="image/*"
+                                                        onChange={handleImageChange}
+                                                    />
+                                                )}
+                                                {editingShow.image?.url && (
+                                                    <div className="mt-2">
+                                                        <img src={editingShow.image.url} alt="Current" className="w-24 h-24 object-cover rounded" />
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400">Current Image</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Image</Label>
+                                                <Input
+                                                    type="file"
+                                                    name="image"
+                                                    accept="image/*"
+                                                    onChange={handleImageChange}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Genres</Label>
+                                        <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto">
+                                            {genreOptions.map((genre) => (
+                                                <div key={genre} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={genre}
+                                                        checked={formData.genre.includes(genre)}
+                                                        onCheckedChange={(checked) => handleGenreChange(genre, checked as boolean)}
+                                                    />
+                                                    <Label htmlFor={genre} className="text-sm text-slate-700 dark:text-slate-200">
+                                                        {genre}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     <div className="flex justify-end gap-3 pt-2">
