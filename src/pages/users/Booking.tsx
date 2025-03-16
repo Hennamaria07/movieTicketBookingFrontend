@@ -37,6 +37,12 @@ interface Screen {
   specialSeats: SpecialSeat[];
 }
 
+interface BookedSeat {
+  row: number;
+  seat: number;
+  categoryId: string;
+}
+
 interface Showtime {
   _id: string;
   theaterId: Theater;
@@ -48,6 +54,7 @@ interface Showtime {
   status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
   totalSeats: number;
   avaliableSeats: number;
+  bookedSeat: BookedSeat[];
   image?: {
     publicId: string;
     url: string;
@@ -63,7 +70,6 @@ interface Seat {
   category: SeatCategory;
 }
 
-
 const Booking = () => {
   const navigate = useNavigate();
   const { id: showId } = useParams<{ id: string }>();
@@ -76,47 +82,51 @@ const Booking = () => {
       if (!showId) throw new Error('Show ID is required');
       const response = await axios.get(`${API_GET_THEATER_SHOW_DETAILS_BY_SHOWID_URL}/${showId}`, {
         headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
       });
-      console.log(response, '<===');
+      console.log('Showtime response:', response.data);
       return response.data;
     },
     enabled: !!showId,
     staleTime: 5 * 60 * 1000,
-    // cacheTime: 10 * 60 * 1000,
   });
 
-  const generateSeats = (screen: Screen, availableSeats: number): Seat[] => {
+  const generateSeats = (screen: Screen, bookedSeats: BookedSeat[]): Seat[] => {
     const seats: Seat[] = [];
     const defaultCategory = screen.seatCategories.find(cat => cat.id === 'regular') || screen.seatCategories[0];
 
     for (let rowIndex = 0; rowIndex < screen.rows; rowIndex++) {
-      const rowLetter = String.fromCharCode(65 + rowIndex);
+      const rowLetter = String.fromCharCode(65 + rowIndex); // A, B, C, etc.
+      const rowNum = rowIndex + 1; // 1-based row number to match backend
+
       for (let seatNum = 1; seatNum <= screen.seatsPerRow; seatNum++) {
         const specialSeat = screen.specialSeats.find(
-          ss => ss.row === rowIndex + 1 && ss.seat === seatNum
+          ss => ss.row === rowNum && ss.seat === seatNum
         );
-        const category = specialSeat 
+        const category = specialSeat
           ? screen.seatCategories.find(cat => cat.id === specialSeat.categoryId) || defaultCategory
           : defaultCategory;
 
-        const seatIndex = rowIndex * screen.seatsPerRow + (seatNum - 1);
+        const isBooked = bookedSeats.some(
+          bs => bs.row === rowNum && bs.seat === seatNum
+        );
+
         seats.push({
           id: `${rowLetter}${seatNum}`,
           row: rowLetter,
           number: seatNum,
-          isAvailable: seatIndex < availableSeats,
-          category
+          isAvailable: !isBooked,
+          category,
         });
       }
     }
     return seats;
   };
 
-  const seats = showDetails?.screenId 
-    ? generateSeats(showDetails.screenId, showDetails.avaliableSeats) 
+  const seats = showDetails?.screenId && showDetails?.bookedSeat
+    ? generateSeats(showDetails.screenId, showDetails.bookedSeat)
     : [];
   const seatsPerRow = showDetails?.screenId.seatsPerRow || 0;
   const rowCount = showDetails?.screenId.rows || 0;
@@ -125,7 +135,7 @@ const Booking = () => {
     const seat = seats.find(s => s.id === seatId);
     if (!seat || !seat.isAvailable) return;
 
-    setSelectedSeats(prev => 
+    setSelectedSeats(prev =>
       prev.includes(seatId)
         ? prev.filter(id => id !== seatId)
         : [...prev, seatId]
@@ -149,13 +159,13 @@ const Booking = () => {
       showId,
       seats: selectedSeats.map(seatId => ({
         seatId,
-        category: seats.find(s => s.id === seatId)?.category
+        category: seats.find(s => s.id === seatId)?.category,
       })),
       total: calculateTotal(),
-      showDetails
+      showDetails,
     };
 
-    navigate('/booking/confirmation', { state: bookingData });
+    navigate('/booking/payment', { state: bookingData });
   };
 
   if (!showId) {
@@ -207,9 +217,9 @@ const Booking = () => {
                 </div>
                 {showDetails.image && (
                   <div>
-                    <img 
-                      src={showDetails.image.url} 
-                      alt={showDetails.showName} 
+                    <img
+                      src={showDetails.image.url}
+                      alt={showDetails.showName}
                       className="w-full h-32 object-cover rounded"
                     />
                   </div>
@@ -331,8 +341,8 @@ const Booking = () => {
                     <span className="mr-2">Selected Seats: {selectedSeats.length}</span>
                     <span>Total: ${calculateTotal()}</span>
                   </div>
-                  <Button 
-                    onClick={handleBooking} 
+                  <Button
+                    onClick={handleBooking}
                     disabled={selectedSeats.length === 0 || showDetails.avaliableSeats === 0}
                   >
                     Book Now
