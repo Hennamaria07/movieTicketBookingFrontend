@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { ThemeProvider } from "./components/ui/theme-provider"
 import { Toaster } from "sonner"
 import UserLayout from "./layout/UserLayout"
-import { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage, AdminDashboard, UserManagementPage, TheaterManagementPage, ContentModerationPage, AdminFinanceDashboard, SystemAnalyticsPage, SecurityAndComplianceDashboard, AdminSettingsPage } from "./pages"
+import { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, Booking, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage, AdminDashboard, UserManagementPage, TheaterManagementPage, ContentModerationPage, AdminFinanceDashboard, SystemAnalyticsPage, SecurityAndComplianceDashboard, AdminSettingsPage, BookingConfirmation, Payment} from "./pages"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TheaterLayout from "./layout/TheaterLayout"
 import AdminLayout from "./layout/AdminLayout"
@@ -27,6 +27,9 @@ const App = () => {
               <Route path="/wallet" element={<Wallet />} />
               <Route path="/rewards" element={<Rewards />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/booking/:id" element={<Booking />} />
+              <Route path="/booking/payment" element={<Payment />} />
+              <Route path='booking/confirmation' element={<BookingConfirmation />} />
             </Route>
             <Route path="/" element={<TheaterLayout />}>
               <Route path="/theater/dashboard" element={<TheaterDashboard />} />

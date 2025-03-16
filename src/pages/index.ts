@@ -7,9 +7,13 @@ import Offer from "./users/Offer"
 import Wallet from "./users/Wallet"
 import Rewards from "./users/Rewards"
 import Profile from "./users/Profile"
-import TheaterDashboard from "./theater/Dashbroad"
+import Booking from "./users/Booking"
+import BookingConfirmation from "./users/BookingConfrimation" 
+
 import Login from "./auth/Login"
 import SignUp from "./auth/Signup"
+
+import TheaterDashboard from "./theater/Dashbroad"
 import ManageShowsPage from "./theater/MangeShows"
 import SeatPricingPanel from "./theater/SeatPricingPanel"
 import TheaterAdminSettings from "./theater/TheaterSetting"
@@ -26,5 +30,6 @@ import AdminFinanceDashboard from "./admin/AdminFinanceDashboard"
 import SystemAnalyticsPage from "./admin/SystemAnalyticsPage"
 import SecurityAndComplianceDashboard from "./admin/SecurityAndComplianceDashboard"
 import AdminSettingsPage from "./admin/AdminSettingsPage"
+import Payment from "./users/Payment"
 
-export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, TheaterDashboard, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage, AdminDashboard, UserManagementPage,TheaterManagementPage, ContentModerationPage, AdminFinanceDashboard, SystemAnalyticsPage, SecurityAndComplianceDashboard, AdminSettingsPage }
+export { Home, Movies, Theaters, Ticket, Review, Offer, Wallet, Rewards, Profile, Booking, BookingConfirmation, TheaterDashboard,Payment, Login, SignUp, ManageShowsPage, SeatPricingPanel, TheaterAdminSettings, BookingsCancellationsPage, TheaterAnalyticsDashboard, CustomerFeedbackPage, OffersManagementPage, AdminDashboard, UserManagementPage,TheaterManagementPage, ContentModerationPage, AdminFinanceDashboard, SystemAnalyticsPage, SecurityAndComplianceDashboard, AdminSettingsPage }

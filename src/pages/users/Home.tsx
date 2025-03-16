@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltips"
 import { Skeleton } from "../../components/ui/skeleton"
-import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL } from "../../utils/api"
+import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL} from "../../utils/api"
 import axios from 'axios'
 
 // Define Movie interface based on Showtime schema

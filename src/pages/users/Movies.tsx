@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils';
 import { Skeleton } from '../../components/ui/skeleton';
 import { MovieCard } from "../../components/cards/MovieCard";
 import { VoiceSearchButton } from '../../components/VoiceSearchButton';
-import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL } from '../../utils/api';
+import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL, API_GET_ALL_TRENDING_SHOWS_URL } from '../../utils/api';
 
 const tabs = [
   { id: 'now-showing', label: 'Now Showing' },
@@ -79,7 +79,7 @@ const Movies = () => {
         case 'trending':
           // For now, we'll use ongoing shows for trending as an example
           // You might want to add a specific trending endpoint later
-          url = API_GET_ALL_ONGOING_SHOWS_URL;
+          url = API_GET_ALL_TRENDING_SHOWS_URL;
           break;
         default:
           url = API_GET_ALL_ONGOING_SHOWS_URL;

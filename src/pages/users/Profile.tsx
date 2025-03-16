@@ -1,319 +1,289 @@
-import { useState, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useRef, useEffect } from 'react'
 import { 
   AiOutlineCamera,
   AiOutlineMail,
   AiOutlinePhone,
   AiOutlineEdit,
-  AiOutlineStar,
-  AiOutlineWallet,
-  AiOutlineSetting,
-  AiOutlineLock,
-  AiOutlineLogout,
-  AiOutlineQrcode,
-  AiOutlineDelete
+  AiOutlineSave,
+  AiOutlineClose
 } from 'react-icons/ai'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
-import { Progress } from '../../components/ui/progress'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tab'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
-import { cn } from '../../lib/utils'
+import { Input } from "../../components/ui/input"
+import { Label } from "../../components/ui/Label"
+import axios from 'axios'
+import { API_GET_USER_BY_ID, API_UPDATE_USER_URL } from '../../utils/api'
+import { useSelector } from 'react-redux'
 
-interface Booking {
-  id: string
-  movieTitle: string
-  date: string
-  time: string
-  theater: string
-  seats: string[]
-  status: 'upcoming' | 'completed' | 'cancelled'
+interface IUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatar: {
+    publicId: string;
+    url: string;
+  };
+  phone?: string;
 }
-
-interface Review {
-  id: string
-  movieTitle: string
-  rating: number
-  review: string
-  date: string
-}
-
-const mockBookings: Booking[] = [
-  {
-    id: '1',
-    movieTitle: 'Dune: Part Two',
-    date: '2024-03-15',
-    time: '19:30',
-    theater: 'IMAX Cinema City',
-    seats: ['G12', 'G13'],
-    status: 'upcoming'
-  },
-  {
-    id: '2',
-    movieTitle: 'Poor Things',
-    date: '2024-03-08',
-    time: '20:00',
-    theater: 'Cineplex Downtown',
-    seats: ['F5'],
-    status: 'completed'
-  }
-]
-
-const mockReviews: Review[] = [
-  {
-    id: '1',
-    movieTitle: 'Poor Things',
-    rating: 4.5,
-    review: 'A masterpiece of imagination and visual storytelling...',
-    date: '2024-03-09'
-  }
-]
 
 const Profile = () => {
-  const [activeTab, setActiveTab] = useState('bookings')
-  const [points] = useState(500)
-  const [walletBalance] = useState(149.99)
+  const [userData, setUserData] = useState<IUser | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [formData, setFormData] = useState<IUser | null>(null)
   const [avatarUrl, setAvatarUrl] = useState("/avatars/user.png")
+  const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const userId = useSelector((state: any) => state.user.auth.userInfo.id)
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setLoading(true)
+        const response = await axios.get(`${API_GET_USER_BY_ID}/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          }
+        })
+
+        if (response.data.success) {
+          const user = response.data.data
+          setUserData(user)
+          setFormData(user)
+          setAvatarUrl(user.avatar.url)
+        } else {
+          throw new Error('Failed to fetch user data')
+        }
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to fetch user data')
+        console.error('Error fetching user:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (userId) {
+      fetchUserData()
+    }
+  }, [userId])
 
   const handleUploadPhoto = () => {
     fileInputRef.current?.click()
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      const imageUrl = URL.createObjectURL(file)
-      setAvatarUrl(imageUrl)
-      toast.success('Profile photo updated!')
+    if (file && userData) {
+      try {
+        const formData = new FormData()
+        formData.append('avatarFile', file)
+
+        const response = await axios.patch(
+          `${API_UPDATE_USER_URL}/${userId}`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            }
+          }
+        )
+
+        if (response.status === 200) {
+          const updatedUser = response.data.user
+          setAvatarUrl(updatedUser.avatar.url)
+          setUserData(updatedUser)
+          setFormData(updatedUser)
+          toast.success('Profile photo updated!')
+        }
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || 'Failed to update profile photo')
+        console.error('Error uploading avatar:', error)
+      }
     }
   }
 
-  const handleDownloadTicket = (bookingId: string) => {
-    // Implement ticket download logic
-    toast.success('Ticket downloaded!')
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => prev ? { ...prev, [name]: value } : null)
   }
 
-  const handleCancelBooking = (bookingId: string) => {
-    // Implement booking cancellation logic
-    toast.success('Booking cancelled! Refund initiated.')
+  const handleSave = async () => {
+    if (!formData || !userData) return
+
+    try {
+      const response = await axios.patch(
+        `${API_UPDATE_USER_URL}/${userId}`,
+        {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone || undefined // Ensure empty string is sent as undefined
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          }
+        }
+      )
+
+      if (response.status === 200) {
+        const updatedUser = response.data.user
+        setUserData(updatedUser)  // Update userData with server response
+        setFormData(updatedUser)  // Sync formData with server response
+        setEditMode(false)
+        toast.success('Profile updated successfully!')
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update profile')
+      console.error('Error updating profile:', error)
+    }
+  }
+
+  const handleCancel = () => {
+    setFormData(userData)  // Reset formData to original userData
+    setEditMode(false)
+  }
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>
+  }
+
+  if (!userData || !formData) {
+    return <div className="flex justify-center items-center h-screen">Error loading profile</div>
   }
 
   return (
-    <div className="space-y-8">
-      {/* Profile Header */}
+    <div className="space-y-8 p-4 max-w-3xl mx-auto">
       <Card className="relative overflow-hidden">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="relative group">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={avatarUrl} />
-                <AvatarFallback>JD</AvatarFallback>
-              </Avatar>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Profile Information</CardTitle>
+            <div className="flex gap-2">
+              {!editMode ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setEditMode(true)}
+                >
+                  <AiOutlineEdit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSave}
+                    className="bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    <AiOutlineSave className="h-4 w-4 mr-2" />
+                    Save
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleCancel}
+                    className="bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    <AiOutlineClose className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center">
+          <div className="relative group mb-8">
+            <Avatar className="h-32 w-32 border-4 border-white shadow-lg">
+              <AvatarImage src={avatarUrl} />
+              <AvatarFallback className="text-2xl">
+                {userData.firstName[0]}{userData.lastName[0]}
+              </AvatarFallback>
+            </Avatar>
+            {editMode && (
               <button 
                 onClick={handleUploadPhoto}
-                className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"
+                className="absolute bottom-0 right-0 bg-blue-500 p-2 rounded-full text-white hover:bg-blue-600 transition-colors"
               >
-                <AiOutlineCamera className="h-6 w-6 text-white" />
+                <AiOutlineCamera className="h-5 w-5" />
               </button>
-              <input 
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                className="hidden"
+            )}
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
+          </div>
+          <div className="w-full max-w-md space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="firstName" className="text-sm font-medium">First Name</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleInputChange}
+                disabled={!editMode}
+                // className={!editMode ? "border-none" : ""}
               />
             </div>
-            <div className="flex-1 text-center md:text-left">
-              <h2 className="text-2xl font-bold">John Doe</h2>
-              <div className="flex flex-col md:flex-row gap-4 mt-2 text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <AiOutlineMail className="h-4 w-4" />
-                  john.doe@example.com
-                </span>
-                <span className="flex items-center gap-2">
-                  <AiOutlinePhone className="h-4 w-4" />
-                  +1 234 567 8900
-                </span>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName" className="text-sm font-medium">Last Name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleInputChange}
+                disabled={!editMode}
+                // className={!editMode ? "border-none" : ""}
+              />
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="icon">
-                <AiOutlineEdit className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon">
-                <AiOutlineSetting className="h-4 w-4" />
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium flex items-center gap-2">
+                <AiOutlineMail className="h-4 w-4" />
+                Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                disabled={!editMode}
+                // className={!editMode ? "bg-gray-100 border-none" : ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-2">
+                <AiOutlinePhone className="h-4 w-4" />
+                Phone
+              </Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={formData.phone || ''}
+                onChange={handleInputChange}
+                disabled={!editMode}
+                // className={!editMode ? "bg-gray-100 border-none" : ""}
+                placeholder="Not provided"
+              />
             </div>
           </div>
         </CardContent>
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 -z-10" />
       </Card>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <AiOutlineStar className="h-5 w-5 text-yellow-500" />
-              Loyalty Points
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{points} points</div>
-            <Progress value={50} className="h-2 mt-2" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <AiOutlineWallet className="h-5 w-5 text-green-500" />
-              Wallet Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${walletBalance}</div>
-            <Button variant="outline" size="sm" className="mt-2">
-              Add Money
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <AiOutlineLock className="h-5 w-5 text-blue-500" />
-              Account Security
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" size="sm" className="w-full">
-              Enable 2FA
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="bookings" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="bookings" className="space-y-4">
-          {mockBookings.map((booking) => (
-            <Card key={booking.id}>
-              <CardHeader>
-                <CardTitle>{booking.movieTitle}</CardTitle>
-                <CardDescription>
-                  {booking.theater} • {booking.date} at {booking.time}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Seats:</span>
-                    <span className="font-medium">{booking.seats.join(', ')}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Status:</span>
-                    <span className={cn(
-                      "font-medium",
-                      booking.status === 'upcoming' && "text-blue-500",
-                      booking.status === 'completed' && "text-green-500",
-                      booking.status === 'cancelled' && "text-red-500"
-                    )}>
-                      {booking.status}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDownloadTicket(booking.id)}
-                  >
-                    <AiOutlineQrcode className="h-4 w-4 mr-2" />
-                    Download Ticket
-                  </Button>
-                  {booking.status === 'upcoming' && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleCancelBooking(booking.id)}
-                    >
-                      Cancel Booking
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-
-        <TabsContent value="reviews" className="space-y-4">
-          {mockReviews.map((review) => (
-            <Card key={review.id}>
-              <CardHeader>
-                <div className="flex justify-between">
-                  <CardTitle>{review.movieTitle}</CardTitle>
-                  <div className="flex items-center gap-1">
-                    <AiOutlineStar className="h-5 w-5 text-yellow-500" />
-                    <span className="font-medium">{review.rating}</span>
-                  </div>
-                </div>
-                <CardDescription>{new Date(review.date).toLocaleDateString()}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">{review.review}</p>
-                <div className="flex gap-2 mt-4">
-                  <Button variant="outline" size="sm">
-                    <AiOutlineEdit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <AiOutlineDelete className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-
-        <TabsContent value="settings">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Settings</CardTitle>
-              <CardDescription>
-                Manage your account settings and preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button variant="outline" className="w-full justify-start">
-                <AiOutlineLock className="h-4 w-4 mr-2" />
-                Change Password
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <AiOutlineSetting className="h-4 w-4 mr-2" />
-                Notification Preferences
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-red-500">
-                <AiOutlineLogout className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
