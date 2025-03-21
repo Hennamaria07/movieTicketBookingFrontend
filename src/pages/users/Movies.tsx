@@ -1,59 +1,54 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { 
-  AiOutlineSearch, 
-} from 'react-icons/ai';
+import { AiOutlineSearch } from 'react-icons/ai';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { cn } from '../../lib/utils';
 import { Skeleton } from '../../components/ui/skeleton';
-import { MovieCard } from "../../components/cards/MovieCard";
+import { MovieCard } from '../../components/cards/MovieCard';
 import { VoiceSearchButton } from '../../components/VoiceSearchButton';
 import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL, API_GET_ALL_TRENDING_SHOWS_URL } from '../../utils/api';
+import { useNavigate } from 'react-router-dom';
 
+// Tab definitions
 const tabs = [
   { id: 'now-showing', label: 'Now Showing' },
   { id: 'coming-soon', label: 'Coming Soon' },
   { id: 'trending', label: 'Trending' },
 ];
 
+// Genre options
 const genres = [
-  'Action', 'Comedy', 'Drama', 'Horror', 'Romance', 
+  'Action', 'Comedy', 'Drama', 'Horror', 'Romance',
   'Sci-Fi', 'Thriller', 'Documentary', 'Adventure', 'Fantasy', 'Animation'
 ];
 
-// Define the Movie interface based on your Showtime schema
+// Updated Movie interface aligned with showtimeSchema
 interface Movie {
   _id: string;
   showName: string;
   Date: string;
-  startTime: string;
-  endTime: string;
+  startTime: string[];
+  duration: string;
   theaterId: { _id: string; name: string };
   screenId: { _id: string; hallName: string };
   totalSeats: number;
-  avaliableSeats: number;
-  status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
+  availableSeats: number;
+  status: 'available' | 'high demand' | 'sold out' | 'cancelled';
   image?: {
     publicId: string;
     url: string;
   };
   genre: string[];
+  bookedSeat?: { row: number; seat: number; categoryId: string }[];
+  tempBookedSeats?: { row: number; seat: number; categoryId: string; orderId: string }[];
 }
 
-// Function to convert 24-hour time to 12-hour format with AM/PM
-const formatTimeTo12Hour = (time: string): string => {
-  const [hours, minutes] = time.split(':');
-  const hourNum = parseInt(hours, 10);
-  const period = hourNum >= 12 ? 'PM' : 'AM';
-  const adjustedHour = hourNum % 12 || 12; // Convert 0 or 12 to 12
-  return `${adjustedHour}:${minutes} ${period}`;
-}
-
+// Axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:5000', // Adjust base URL as needed
+  baseURL: 'http://localhost:5000',
   headers: {
     'Authorization': `Bearer ${localStorage.getItem('token')}`,
     'Content-Type': 'application/json'
@@ -64,8 +59,9 @@ const Movies = () => {
   const [activeTab, setActiveTab] = useState('now-showing');
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
 
-  const { data: movies, isLoading } = useQuery<Movie[]>({
+  const { data: movies, isLoading, error } = useQuery<Movie[]>({
     queryKey: ['movies', activeTab],
     queryFn: async () => {
       let url = '';
@@ -77,39 +73,47 @@ const Movies = () => {
           url = API_GET_ALL_UPCOMING_SHOWS_URL;
           break;
         case 'trending':
-          // For now, we'll use ongoing shows for trending as an example
-          // You might want to add a specific trending endpoint later
           url = API_GET_ALL_TRENDING_SHOWS_URL;
           break;
         default:
           url = API_GET_ALL_ONGOING_SHOWS_URL;
       }
-
       const response = await api.get(url);
-      console.log(response, '<===');
-      // Assuming the API returns an array of shows directly
       return response.data.data;
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  const filteredMovies = movies?.filter(movie => {
-    const matchesGenre = selectedGenres.length === 0 || 
-      movie.genre.some(g => selectedGenres.includes(g));
-    const matchesSearch = movie.showName
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    return matchesGenre && matchesSearch;
-  });
+  // Memoized filtering for performance
+  const filteredMovies = useMemo(() => {
+    return movies?.filter(movie => {
+      const matchesGenre = selectedGenres.length === 0 ||
+        movie.genre.some(g => selectedGenres.includes(g));
+      const matchesSearch = movie.showName
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return matchesGenre && matchesSearch;
+    });
+  }, [movies, selectedGenres, searchQuery]);
 
   const toggleGenre = (genre: string) => {
-    setSelectedGenres(prev => 
+    setSelectedGenres(prev =>
       prev.includes(genre)
         ? prev.filter(g => g !== genre)
         : [...prev, genre]
     );
   };
+
+  // Handle navigation to booking page
+
+
+  if (error) {
+    return (
+      <div className="max-w-screen min-h-screen pt-4 text-center text-red-500">
+        Error loading movies: {(error as Error).message}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-screen min-h-screen pt-4">
@@ -122,7 +126,7 @@ const Movies = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
-        <VoiceSearchButton 
+        <VoiceSearchButton
           onTranscript={setSearchQuery}
           className="absolute right-3 top-1/2 -translate-y-1/2"
         />
@@ -134,11 +138,11 @@ const Movies = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors relative",
-              activeTab === tab.id 
-                ? "text-foreground" 
-                : "text-muted-foreground"
+              activeTab === tab.id ? "text-foreground" : "text-muted-foreground"
             )}
           >
             {tab.label}
@@ -182,21 +186,28 @@ const Movies = () => {
               No movies found matching your criteria.
             </div>
           ) : (
-            filteredMovies?.map((movie) => (
-              <MovieCard 
-                key={movie._id} 
-                movie={{
-                  id: movie._id,
-                  title: movie.showName,
-                  genre: movie.genre,
-                  poster: movie.image?.url || 'https://via.placeholder.com/300x400',
-                  rating: 0, // Add rating logic if available in API
-                  duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
-                  releaseDate: new Date(movie.Date).toLocaleDateString(),
-                  // Add other fields as needed for MovieCard
-                }} 
-                variant="default" 
-              />
+            filteredMovies?.map((show: any) => (
+              <div
+                key={show._id}
+                onClick={() => handleMovieClick(show._id)}
+                className="cursor-pointer"
+              >
+                <MovieCard
+                  movie={{
+                    id: show._id,
+                    title: show.showName,
+                    genre: show.genre,
+                    poster: show.image?.url || 'https://via.placeholder.com/300x400',
+                    rating: 0,
+                    duration: show.duration,
+                    releaseDate: new Date(show.Date).toLocaleDateString(),
+                    availability: show.availableSeats,
+                    theater: show.theaterId.name,
+                    screen: show.screenId.hallName
+                  }}
+                  variant="default"
+                />
+              </div>
             ))
           )}
         </AnimatePresence>

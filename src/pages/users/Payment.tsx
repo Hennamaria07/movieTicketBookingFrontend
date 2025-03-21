@@ -21,6 +21,7 @@ interface BookingData {
   seats: Seat[];
   total: number;
   showDetails: any; // Refine this based on your Showtime interface
+  bookingDate: Date | string;
 }
 
 interface Order {
@@ -34,37 +35,41 @@ const Payment = () => {
   const { state: bookingData } = useLocation() as { state: BookingData | undefined };
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
-  const [bookingId, setBookingId] = useState<string | null>(null); // Store booking ID
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const userId = useSelector((state: any) => state.user.auth.userInfo.id)
+  const userId = useSelector((state: any) => state.user.auth.userInfo.id);
 
+  // Fetch Razorpay order when bookingData is available
   useEffect(() => {
     if (!bookingData) {
-      navigate(-1);
+      navigate(-1); // Redirect back if no booking data
       return;
     }
 
     const fetchOrder = async () => {
       try {
-        const response = await axios.post(API_BOOK_SHOW_URL, {
-          showtimeId: bookingData.showId, // Match backend expectation
-          seats: bookingData.seats.map((s) => ({
-            totalSeats: 1,
-            seatType: s.category.name,
-            seatNumber: s.seatId,
-            price: s.category.price,
-          })),
-          userId, // Replace with actual user ID from auth context
-          theaterId: bookingData.showDetails.theaterId, // Adjust based on your showDetails structure
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        const response = await axios.post(
+          API_BOOK_SHOW_URL,
+          {
+            showtimeId: bookingData.showId,
+            seats: bookingData.seats.map((s) => ({
+              totalSeats: 1,
+              seatType: s.category.name,
+              seatNumber: s.seatId,
+              price: s.category.price,
+            })),
+            userId,
+            theaterId: bookingData.showDetails.theaterId._id, // Ensure this matches your showDetails structure
+            bookingDate: bookingData.bookingDate,
           },
-        });
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+          }
+        );
         setOrder(response.data.order);
-        setBookingId(response.data.data._id); // Store the booking ID from the response
       } catch (err) {
         setError('Error creating order. Please try again.');
         console.error('Error creating order:', err);
@@ -72,11 +77,26 @@ const Payment = () => {
     };
 
     fetchOrder();
-  }, [bookingData, navigate]);
+  }, [bookingData, navigate, userId]);
 
+  // Load Razorpay SDK
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => console.log('Razorpay SDK loaded');
+    script.onerror = () => setError('Failed to load Razorpay SDK.');
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Handle payment initiation and confirmation
   const handlePayment = () => {
-    if (!order || !bookingData || !bookingId) {
-      setError('Order, booking data, or booking ID is missing.');
+    if (!order || !bookingData) {
+      setError('Order or booking data is missing.');
       return;
     }
 
@@ -88,17 +108,21 @@ const Payment = () => {
       handler: async (response: any) => {
         setLoading(true);
         try {
-          const bookingResponse = await axios.patch(API_COMFIRM_BOOKING_PAYMENT, {
-            bookingId: bookingId, // Use the stored booking ID
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_signature: response.razorpay_signature,
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          const bookingResponse = await axios.patch(
+            API_COMFIRM_BOOKING_PAYMENT,
+            {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
             },
-          });
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              },
+            }
+          );
+
           if (bookingResponse.data.success) {
             navigate('/booking/confirmation', {
               state: { ...bookingData, payment: bookingResponse.data.data },
@@ -112,7 +136,7 @@ const Payment = () => {
         }
       },
       prefill: {
-        name: 'Customer Name',
+        name: 'Customer Name', // Replace with dynamic user data if available
         email: 'customer@example.com',
         contact: '9999999999',
       },
@@ -134,21 +158,9 @@ const Payment = () => {
     rzp.open();
   };
 
-  // Ensure Razorpay script is loaded
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.onload = () => console.log('Razorpay SDK loaded');
-    script.onerror = () => setError('Failed to load Razorpay SDK.');
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
-
-  if (!bookingData) return <div>Redirecting...</div>;
+  if (!bookingData) {
+    return <div>Redirecting...</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto py-6 px-4">
@@ -163,6 +175,12 @@ const Payment = () => {
             <div>
               <p>Total Amount: ₹{(bookingData.total).toFixed(2)}</p>
               <p>Selected Seats: {bookingData.seats.map((s) => s.seatId).join(', ')}</p>
+              <p>Show: {bookingData.showDetails.showName}</p>
+              <p>
+                Date: {new Date(bookingData.bookingDate).toLocaleDateString()} -{' '}
+                {bookingData.showDetails.startTime}
+              </p>
+              <p>Theater: {bookingData.showDetails.theaterId.name}</p>
             </div>
             <Button onClick={handlePayment} disabled={loading || !order}>
               {loading ? 'Processing...' : 'Pay Now'}

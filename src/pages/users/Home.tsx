@@ -16,22 +16,26 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltips"
 import { Skeleton } from "../../components/ui/skeleton"
-import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL} from "../../utils/api"
+import { API_GET_ALL_ONGOING_SHOWS_URL, API_GET_ALL_UPCOMING_SHOWS_URL } from "../../utils/api"
 import axios from 'axios'
 
-// Define Movie interface based on Showtime schema
+// Movie interface based on Showtime schema
 interface Movie {
   _id: string;
   showName: string;
-  Date: string;
-  startTime: string;
-  endTime: string;
   theaterId: { _id: string; name: string };
   screenId: { _id: string; hallName: string };
+  startTime: string[];
+  duration: string;
+  Date: string;
+  status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
   totalSeats: number;
   avaliableSeats: number;
-  status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
   image?: {
+    publicId: string;
+    url: string;
+  };
+  poster?: {
     publicId: string;
     url: string;
   };
@@ -46,12 +50,29 @@ interface Offer {
   gradient: string;
 }
 
-// Function to convert 24-hour time to 12-hour format with AM/PM
+// Helper functions
+const parseDurationToMinutes = (duration: string): number => {
+  const [hours, minutes] = duration.split(' ').map(part => 
+    parseInt(part.replace(/\D/g, '')) || 0
+  );
+  return (hours * 60) + minutes;
+}
+
+const calculateEndTime = (startTime: string, duration: string): string => {
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const totalMinutes = (hours * 60) + minutes + parseDurationToMinutes(duration);
+  
+  const endHours = Math.floor(totalMinutes / 60) % 24;
+  const endMinutes = totalMinutes % 60;
+  
+  return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+}
+
 const formatTimeTo12Hour = (time: string): string => {
   const [hours, minutes] = time.split(':');
   const hourNum = parseInt(hours, 10);
   const period = hourNum >= 12 ? 'PM' : 'AM';
-  const adjustedHour = hourNum % 12 || 12; // Convert 0 or 12 to 12
+  const adjustedHour = hourNum % 12 || 12;
   return `${adjustedHour}:${minutes} ${period}`;
 }
 
@@ -62,7 +83,7 @@ const fadeInUp = {
 }
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000', // Adjust base URL as needed
+  baseURL: 'http://localhost:5000',
   headers: {
     'Authorization': `Bearer ${localStorage.getItem('token')}`,
     'Content-Type': 'application/json'
@@ -73,26 +94,46 @@ const Home = () => {
   const [loading, setLoading] = useState(true)
   const [activeMovies, setActiveMovies] = useState<Movie[]>([])
   const [upcomingMovies, setUpcomingMovies] = useState<Movie[]>([])
-  const [currentOffers] = useState<Offer[]>([]) // Keeping offers as static for now
+  const [currentOffers] = useState<Offer[]>([
+    {
+      id: "1",
+      title: "50% Off First Booking",
+      description: "Get half off your first movie ticket!",
+      code: "FIRST50",
+      gradient: "from-blue-500 to-purple-500"
+    },
+    {
+      id: "2",
+      title: "Weekend Special",
+      description: "25% off on weekend shows",
+      code: "WEEKEND25",
+      gradient: "from-red-500 to-orange-500"
+    },
+    {
+      id: "3",
+      title: "Group Discount",
+      description: "Book 4+ tickets, get 20% off",
+      code: "GROUP20",
+      gradient: "from-green-500 to-teal-500"
+    }
+  ])
   const navigate = useNavigate()
   const [imagesLoaded, setImagesLoaded] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch ongoing shows
         const ongoingResponse = await api.get(API_GET_ALL_ONGOING_SHOWS_URL)
-        const ongoingData = ongoingResponse.data.data.slice(0, 4) // Get first 4
+        const ongoingData = ongoingResponse.data.data.slice(0, 4)
         setActiveMovies(ongoingData)
 
-        // Fetch upcoming shows
         const upcomingResponse = await api.get(API_GET_ALL_UPCOMING_SHOWS_URL)
-        const upcomingData = upcomingResponse.data.data.slice(0, 4) // Get first 4
+        const upcomingData = upcomingResponse.data.data.slice(0, 4)
         setUpcomingMovies(upcomingData)
 
       } catch (error) {
         console.error('Error fetching movies:', error)
-        toast.error("Failed to fetch movies and offers")
+        toast.error("Failed to fetch movies")
       } finally {
         setLoading(false)
       }
@@ -101,7 +142,6 @@ const Home = () => {
     fetchData()
   }, [])
 
-  // Preload images (using active movies as banner images)
   useEffect(() => {
     const loadImages = async () => {
       try {
@@ -110,7 +150,7 @@ const Home = () => {
             activeMovies.map((movie) => {
               return new Promise((resolve, reject) => {
                 const img = new Image()
-                img.src = movie.image?.url || 'https://via.placeholder.com/1920x1080'
+                img.src = movie.image?.url || movie.poster?.url || 'https://via.placeholder.com/1920x1080'
                 img.onload = resolve
                 img.onerror = reject
               })
@@ -119,8 +159,8 @@ const Home = () => {
         }
         setImagesLoaded(true)
       } catch (error) {
-        console.error('Failed to load banner images:', error)
-        setImagesLoaded(true) // Show banner anyway
+        console.error('Failed to load images:', error)
+        setImagesLoaded(true)
       }
     }
 
@@ -145,9 +185,8 @@ const Home = () => {
 
   return (
     <div className="space-y-8">
-      {/* Enhanced Hero Section */}
+      {/* Hero Section */}
       <section className="relative h-[500px] -mt-6 -mx-6 overflow-hidden">
-        {/* Movie Backdrop Slider */}
         <AnimatePresence>
           {imagesLoaded && activeMovies.length > 0 && (
             <div className="absolute inset-0">
@@ -169,7 +208,7 @@ const Home = () => {
                   }}
                 >
                   <img 
-                    src={movie.image?.url || 'https://via.placeholder.com/1920x1080'}
+                    src={movie.poster?.url || 'https://via.placeholder.com/1920x1080'}
                     alt={movie.showName}
                     className="w-full h-full object-cover object-center"
                   />
@@ -203,7 +242,7 @@ const Home = () => {
               }}
             >
               <img 
-                src={movie.image?.url || 'https://via.placeholder.com/300x400'}
+                src={movie.image?.url || movie.poster?.url || 'https://via.placeholder.com/300x400'}
                 alt={movie.showName}
                 className="w-full h-full object-cover"
               />
@@ -263,7 +302,7 @@ const Home = () => {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
-              Book your tickets for the latest movies and enjoy exclusive offers
+              Book your tickets for the latest shows
             </motion.p>
             <motion.div
               whileHover={{ scale: 1.05 }}
@@ -272,6 +311,7 @@ const Home = () => {
               <Button 
                 size="lg" 
                 className="bg-white text-black hover:bg-white/90 relative overflow-hidden group"
+                onClick={() => navigate('/movies')}
               >
                 <span className="relative z-10 flex items-center">
                   Book Now <Play className="ml-2 h-4 w-4" />
@@ -282,7 +322,6 @@ const Home = () => {
           </motion.div>
         </div>
 
-        {/* Bottom Gradient Overlay */}
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
       </section>
 
@@ -301,22 +340,31 @@ const Home = () => {
                 <MovieCardSkeleton key={i} />
               ))
             ) : (
-              activeMovies.map((movie) => (
-                <MovieCard 
-                  key={movie._id} 
-                  movie={{
-                    id: movie._id,
-                    title: movie.showName,
-                    genre: movie.genre,
-                    poster: movie.image?.url || 'https://via.placeholder.com/300x400',
-                    rating: 0, // Add rating logic if available
-                    duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
-                    releaseDate: new Date(movie.Date).toLocaleDateString(),
-                  }} 
-                  variant="simple" 
-                  onBook={() => handleBooking(movie._id)}
-                />
-              ))
+              activeMovies.map((movie) => {
+                const firstStartTime = movie.startTime[0] || "00:00";
+                
+                return (
+                  <MovieCard 
+                    key={movie._id} 
+                    movie={{
+                      id: movie._id,
+                      title: movie.showName,
+                      genre: movie.genre,
+                      poster: movie.image?.url || movie.poster?.url || 'https://via.placeholder.com/300x400',
+                      rating: 0,
+                      duration: movie.duration,
+                      releaseDate: new Date(movie.Date).toLocaleDateString(),
+                      // showTime: `${formatTimeTo12Hour(firstStartTime)} - ${formatTimeTo12Hour(firstStartTime + movie.duration)}`,
+                      theater: movie.theaterId.name,
+                      screen: movie.screenId.hallName,
+                      availability: `${movie.avaliableSeats}/${movie.totalSeats}`,
+                      status: movie.status
+                    }} 
+                    variant="simple" 
+                    onBook={() => handleBooking(movie._id)}
+                  />
+                )
+              })
             )}
           </AnimatePresence>
         </div>
@@ -326,7 +374,7 @@ const Home = () => {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Coming Soon</h2>
-          <Button variant="ghost">
+          <Button variant="ghost" onClick={() => navigate("/movies/upcoming")}>
             View All <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
@@ -337,22 +385,32 @@ const Home = () => {
                 <MovieCardSkeleton key={i} />
               ))
             ) : (
-              upcomingMovies.map((movie) => (
-                <MovieCard 
-                  key={movie._id} 
-                  movie={{
-                    id: movie._id,
-                    title: movie.showName,
-                    genre: movie.genre,
-                    poster: movie.image?.url || 'https://via.placeholder.com/300x400',
-                    rating: 0,
-                    duration: `${formatTimeTo12Hour(movie.startTime)} - ${formatTimeTo12Hour(movie.endTime)}`,
-                    releaseDate: new Date(movie.Date).toLocaleDateString(),
-                  }} 
-                  variant="simple" 
-                  onBook={() => handleBooking(movie._id)}
-                />
-              ))
+              upcomingMovies.map((movie) => {
+                const firstStartTime = movie.startTime[0] || "00:00";
+                const endTime = calculateEndTime(firstStartTime, movie.duration);
+                
+                return (
+                  <MovieCard 
+                    key={movie._id} 
+                    movie={{
+                      id: movie._id,
+                      title: movie.showName,
+                      genre: movie.genre,
+                      poster: movie.poster?.url || movie.image?.url || 'https://via.placeholder.com/300x400',
+                      rating: 0,
+                      duration: movie.duration,
+                      releaseDate: new Date(movie.Date).toLocaleDateString(),
+                      showTime: `${formatTimeTo12Hour(firstStartTime)} - ${formatTimeTo12Hour(endTime)}`,
+                      theater: movie.theaterId.name,
+                      screen: movie.screenId.hallName,
+                      availability: `${movie.avaliableSeats}/${movie.totalSeats}`,
+                      status: movie.status
+                    }} 
+                    variant="simple" 
+                    onBook={() => handleBooking(movie._id)}
+                  />
+                )
+              })
             )}
           </AnimatePresence>
         </div>
@@ -414,8 +472,9 @@ const MovieCardSkeleton = () => (
   <div className="bg-card rounded-lg overflow-hidden">
     <Skeleton className="aspect-[2/3] w-full" />
     <div className="p-4 space-y-3">
+      <Skeleton className="h-6 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
       <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-10 w-full" />
     </div>
   </div>

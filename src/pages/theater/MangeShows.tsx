@@ -20,8 +20,8 @@ interface Show {
     _id: string;
     showName: string;
     Date: string;
-    startTime: string;
-    endTime: string;
+    startTime: string[];
+    duration: string;
     theaterId: { _id: string; name: string };
     screenId: { _id: string; hallName: string };
     totalSeats: number;
@@ -31,18 +31,23 @@ interface Show {
         publicId: string;
         url: string;
     };
+    poster?: {
+        publicId: string;
+        url: string;
+    };
     genre: string[];
 }
 
 interface FormData {
     showName: string;
     Date: string;
-    startTime: string;
-    endTime: string;
+    startTime: string[];
+    duration: string;
     theaterId: string;
     screenId: string;
     status: 'avaliable' | 'high demand' | 'sold out' | 'cancelled';
     image?: File | null;
+    poster?: File | null;
     genre: string[];
 }
 
@@ -109,6 +114,38 @@ const AnimatedCounter: React.FC<{ value: number; prefix?: string; suffix?: strin
     );
 };
 
+// Utility function to parse duration (e.g., "2.30" -> 150 minutes)
+const parseDurationToMinutes = (duration: string): number => {
+    const [hours, minutes] = duration.split('.').map(Number);
+    return (hours || 0) * 60 + (minutes || 0);
+};
+
+// Utility function to format minutes to time string (e.g., 150 -> "02:30 AM/PM")
+const formatMinutesToTime = (minutes: number): string => {
+    const totalMinutes = minutes % (24 * 60); // Wrap around 24 hours
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${String(displayHours).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+};
+
+// Utility function to generate start times based on duration + 30 minutes
+const generateStartTimes = (durationMinutes: number): string[] => {
+    if (durationMinutes <= 0) return [];
+    
+    const extraTime = 30; // Additional 30 minutes
+    const interval = durationMinutes + extraTime; // Interval is duration + 30 minutes
+    const startOfDay = 9 * 60; // 9:00 AM in minutes
+    const endOfDay = 23 * 60; // 11:00 PM in minutes
+    const times: string[] = [];
+    
+    for (let time = startOfDay; time + durationMinutes <= endOfDay; time += interval) {
+        times.push(formatMinutesToTime(time));
+    }
+    return times;
+};
+
 const ManageShowsPage: React.FC = () => {
     const [shows, setShows] = useState<Show[]>([]);
     const [screens, setScreens] = useState<Screen[]>([]);
@@ -121,23 +158,30 @@ const ManageShowsPage: React.FC = () => {
     const [formData, setFormData] = useState<FormData>({
         showName: '',
         Date: '',
-        startTime: '',
-        endTime: '',
+        startTime: [],
+        duration: '',
         theaterId: '',
         screenId: '',
         status: 'avaliable',
         image: null,
+        poster: null,
         genre: []
     });
     const [loading, setLoading] = useState<boolean>(false);
     const [screensLoading, setScreensLoading] = useState<boolean>(false);
     const [updateImage, setUpdateImage] = useState<boolean>(false);
+    const [updatePoster, setUpdatePoster] = useState<boolean>(false);
 
-    // Predefined genre options
     const genreOptions = [
         'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance', 
         'Thriller', 'Adventure', 'Fantasy', 'Animation', 'Documentary'
     ];
+
+    // Generate available start times based on duration + 30 minutes
+    const availableStartTimes = useMemo(() => {
+        const durationMinutes = parseDurationToMinutes(formData.duration);
+        return formData.duration ? generateStartTimes(durationMinutes) : [];
+    }, [formData.duration]);
 
     useEffect(() => {
         fetchShows();
@@ -236,9 +280,22 @@ const ManageShowsPage: React.FC = () => {
         setFormData({ ...formData, [name]: value });
     };
 
+    const handleStartTimeChange = (time: string, checked: boolean) => {
+        if (checked) {
+            setFormData({ ...formData, startTime: [...formData.startTime, time] });
+        } else {
+            setFormData({ ...formData, startTime: formData.startTime.filter(t => t !== time) });
+        }
+    };
+
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
         setFormData({ ...formData, image: file });
+    };
+
+    const handlePosterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setFormData({ ...formData, poster: file });
     };
 
     const handleGenreChange = (genre: string, checked: boolean) => {
@@ -251,18 +308,22 @@ const ManageShowsPage: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log(screens[0].theaterId);
         try {
             setLoading(true);
             const formDataToSend = new FormData();
             formDataToSend.append('showName', formData.showName);
             formDataToSend.append('Date', formData.Date);
-            formDataToSend.append('startTime', formData.startTime);
-            formDataToSend.append('endTime', formData.endTime);
+            formDataToSend.append('startTime', JSON.stringify(formData.startTime));
+            formDataToSend.append('duration', formData.duration);
             formDataToSend.append('theaterId', screens.length > 0 ? screens[0].theaterId : '');
             formDataToSend.append('screenId', formData.screenId);
             formDataToSend.append('status', formData.status);
             if (formData.image) {
                 formDataToSend.append('image', formData.image);
+            }
+            if (formData.poster) {
+                formDataToSend.append('poster', formData.poster);
             }
             formDataToSend.append('genre', JSON.stringify(formData.genre));
 
@@ -286,15 +347,17 @@ const ManageShowsPage: React.FC = () => {
             setIsModalOpen(false);
             setEditingShow(null);
             setUpdateImage(false);
+            setUpdatePoster(false);
             setFormData({
                 showName: '',
                 Date: '',
-                startTime: '',
-                endTime: '',
+                startTime: [],
+                duration: '',
                 theaterId: '',
                 screenId: '',
                 status: 'avaliable',
                 image: null,
+                poster: null,
                 genre: []
             });
         } catch (err) {
@@ -310,15 +373,17 @@ const ManageShowsPage: React.FC = () => {
         setFormData({
             showName: show.showName,
             Date: show.Date.split('T')[0],
-            startTime: show.startTime,
-            endTime: show.endTime,
+            startTime: show.startTime.length > 0 ? show.startTime : [],
+            duration: show.duration,
             theaterId: show.theaterId._id,
             screenId: show.screenId._id,
             status: show.status,
             image: null,
+            poster: null,
             genre: show.genre
         });
         setUpdateImage(false);
+        setUpdatePoster(false);
         setIsModalOpen(true);
     };
 
@@ -341,15 +406,17 @@ const ManageShowsPage: React.FC = () => {
         setFormData({
             showName: '',
             Date: '',
-            startTime: '',
-            endTime: '',
+            startTime: [],
+            duration: '',
             theaterId: screens.length > 0 ? screens[0].theaterId : '',
             screenId: screens.length > 0 ? screens[0]._id : '',
             status: 'avaliable',
             image: null,
+            poster: null,
             genre: []
         });
         setUpdateImage(false);
+        setUpdatePoster(false);
         setIsModalOpen(true);
     };
 
@@ -480,7 +547,9 @@ const ManageShowsPage: React.FC = () => {
                                         <StatusBadge status={show.status} />
                                     </div>
                                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                                        <p>{new Date(show.Date).toLocaleDateString()} • {show.startTime}</p>
+                                        <p>{new Date(show.Date).toLocaleDateString()}</p>
+                                        <p>Start Times: {show.startTime.join(', ')}</p>
+                                        <p>Duration: {show.duration}</p>
                                         <p>{show.screenId.hallName}</p>
                                         <p>{show.avaliableSeats}/{show.totalSeats}</p>
                                         {show.genre.length > 0 && (
@@ -488,6 +557,9 @@ const ManageShowsPage: React.FC = () => {
                                         )}
                                         {show.image?.url && (
                                             <img src={show.image.url} alt={show.showName} className="w-16 h-16 object-cover rounded" />
+                                        )}
+                                        {show.poster?.url && (
+                                            <img src={show.poster.url} alt={`${show.showName} Poster`} className="w-16 h-16 object-cover rounded" />
                                         )}
                                     </div>
                                     <div className="flex justify-end gap-2">
@@ -514,7 +586,8 @@ const ManageShowsPage: React.FC = () => {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer min-w-[120px]" onClick={() => requestSort('Date')}>
                                             <div className="flex items-center">Date {getSortIcon('Date')}</div>
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[120px]">Time</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">Start Times</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[100px]">Duration</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer min-w-[120px]" onClick={() => requestSort('screenId')}>
                                             <div className="flex items-center">Screen {getSortIcon('screenId')}</div>
                                         </th>
@@ -529,12 +602,12 @@ const ManageShowsPage: React.FC = () => {
                                         <motion.tr key={show._id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                             <td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{show.showName}</td>
                                             <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{new Date(show.Date).toLocaleDateString()}</td>
-                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{show.startTime} - {show.endTime}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{show.startTime.join(', ')}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{show.duration}</td>
                                             <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{show.screenId.hallName}</td>
                                             <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{show.avaliableSeats}/{show.totalSeats}</td>
                                             <td className="px-4 py-3"><StatusBadge status={show.status} /></td>
                                             <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{show.genre.join(', ')}</td>
-                                           
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="ghost" size="sm" onClick={() => handleEdit(show)}>
@@ -589,37 +662,48 @@ const ManageShowsPage: React.FC = () => {
                                         />
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div>
-                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Date</Label>
-                                            <Input
-                                                type="date"
-                                                name="Date"
-                                                value={formData.Date}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Start Time</Label>
-                                            <Input
-                                                type="time"
-                                                name="startTime"
-                                                value={formData.startTime}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">End Time</Label>
-                                            <Input
-                                                type="time"
-                                                name="endTime"
-                                                value={formData.endTime}
-                                                onChange={handleInputChange}
-                                                required
-                                            />
-                                        </div>
+                                    <div>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Date</Label>
+                                        <Input
+                                            type="date"
+                                            name="Date"
+                                            value={formData.Date}
+                                            onChange={handleInputChange}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Duration (e.g., 2.30 for 2h 30m)</Label>
+                                        <Input
+                                            name="duration"
+                                            value={formData.duration}
+                                            onChange={handleInputChange}
+                                            placeholder="e.g., 2.30"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Start Times</Label>
+                                        {availableStartTimes.length > 0 ? (
+                                            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto mt-2">
+                                                {availableStartTimes.map((time) => (
+                                                    <div key={time} className="flex items-center space-x-2">
+                                                        <Checkbox
+                                                            id={time}
+                                                            checked={formData.startTime.includes(time)}
+                                                            onCheckedChange={(checked) => handleStartTimeChange(time, checked as boolean)}
+                                                        />
+                                                        <Label htmlFor={time} className="text-sm text-slate-700 dark:text-slate-200">
+                                                            {time}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 dark:text-slate-400">Enter duration to generate start times</p>
+                                        )}
                                     </div>
 
                                     <div>
@@ -710,6 +794,47 @@ const ManageShowsPage: React.FC = () => {
                                     </div>
 
                                     <div>
+                                        {editingShow ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id="updatePoster"
+                                                        checked={updatePoster}
+                                                        onCheckedChange={(checked) => setUpdatePoster(checked as boolean)}
+                                                    />
+                                                    <Label htmlFor="updatePoster" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                        Update Poster
+                                                    </Label>
+                                                </div>
+                                                {updatePoster && (
+                                                    <Input
+                                                        type="file"
+                                                        name="poster"
+                                                        accept="image/*"
+                                                        onChange={handlePosterChange}
+                                                    />
+                                                )}
+                                                {editingShow.poster?.url && (
+                                                    <div className="mt-2">
+                                                        <img src={editingShow.poster.url} alt="Current Poster" className="w-24 h-24 object-cover rounded" />
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400">Current Poster</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Poster</Label>
+                                                <Input
+                                                    type="file"
+                                                    name="poster"
+                                                    accept="image/*"
+                                                    onChange={handlePosterChange}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
                                         <Label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Genres</Label>
                                         <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto">
                                             {genreOptions.map((genre) => (
@@ -734,7 +859,7 @@ const ManageShowsPage: React.FC = () => {
                                         <Button 
                                             type="submit" 
                                             className="bg-indigo-600 hover:bg-indigo-700" 
-                                            disabled={loading || screensLoading || screens.length === 0}
+                                            disabled={loading || screensLoading || screens.length === 0 || formData.startTime.length === 0}
                                         >
                                             {loading ? 'Saving...' : (editingShow ? 'Update' : 'Add')}
                                         </Button>
