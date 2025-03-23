@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useSelector } from 'react-redux';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tab';
 import { Button } from '../../components/ui/button';
@@ -6,50 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { FaChartLine, FaUsers, FaTicketAlt, FaExchangeAlt } from 'react-icons/fa';
 import { MdAccessTime, MdLocationOn } from 'react-icons/md';
 import { motion } from 'framer-motion';
-
-// Sample data
-const salesData = [
-  { day: 'Mon', revenue: 1200, tickets: 85 },
-  { day: 'Tue', revenue: 900, tickets: 65 },
-  { day: 'Wed', revenue: 1500, tickets: 110 },
-  { day: 'Thu', revenue: 2200, tickets: 150 },
-  { day: 'Fri', revenue: 3500, tickets: 250 },
-  { day: 'Sat', revenue: 4200, tickets: 300 },
-  { day: 'Sun', revenue: 3800, tickets: 270 }
-];
-
-const demographicsData = [
-  { name: '18-24', value: 25, color: '#FF6384' },
-  { name: '25-34', value: 35, color: '#36A2EB' },
-  { name: '35-44', value: 20, color: '#FFCE56' },
-  { name: '45-54', value: 10, color: '#4BC0C0' },
-  { name: '55+', value: 10, color: '#9966FF' }
-];
-
-const locationData = [
-  { name: 'Downtown', value: 40, color: '#FF6384' },
-  { name: 'Uptown', value: 25, color: '#36A2EB' },
-  { name: 'Suburbs', value: 20, color: '#FFCE56' },
-  { name: 'Other Areas', value: 15, color: '#4BC0C0' }
-];
-
-const peakHoursData = [
-  { time: '10:00', tickets: 20 },
-  { time: '12:00', tickets: 45 },
-  { time: '14:00', tickets: 70 },
-  { time: '16:00', tickets: 120 },
-  { time: '18:00', tickets: 180 },
-  { time: '20:00', tickets: 210 },
-  { time: '22:00', tickets: 150 }
-];
-
-const popularMovieTimesData = [
-  { movie: 'Action Movie', morning: 20, afternoon: 65, evening: 115 },
-  { movie: 'Comedy', morning: 15, afternoon: 45, evening: 85 },
-  { movie: 'Drama', morning: 10, afternoon: 35, evening: 60 },
-  { movie: 'Sci-Fi', morning: 25, afternoon: 50, evening: 100 },
-  { movie: 'Horror', morning: 5, afternoon: 25, evening: 70 }
-];
+import { API_BASE_URL, API_GET_THEATER_BY_ID_URL } from '../../utils/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -70,8 +29,124 @@ const itemVariants = {
   }
 };
 
-const TheaterAnalyticsDashboard: React.FC = () => {
+const TheaterAnalyticsDashboard = () => {
   const [timeRange, setTimeRange] = useState('weekly');
+  const [theaterId, setTheaterId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [analyticsData, setAnalyticsData] = useState({
+    sales: {
+      salesData: [],
+      totalRevenue: 0,
+      totalTickets: 0,
+      refundsProcessed: 0
+    },
+    demographics: {
+      ageDistribution: [],
+      locationDistribution: [],
+      engagement: {
+        returnRate: 0,
+        avgVisits: 0,
+        satisfactionScore: 0
+      }
+    },
+    peakHours: {
+      peakHours: [],
+      popularMovieTimes: [],
+      capacityUtilization: []
+    }
+  });
+
+  const userId = useSelector((state) => state.user.auth.userInfo?.id);
+
+  // Fetch theaterId
+  useEffect(() => {
+    const fetchTheaterId = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const theaterResponse = await axios.get(`${API_GET_THEATER_BY_ID_URL}/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+        });
+
+        const theaterData = theaterResponse.data.data;
+        setTheaterId(theaterData?._id || '');
+        console.log('Theater ID fetched:', theaterData?._id);
+      } catch (err) {
+        setError(axios.isAxiosError(err) && err.response?.status === 404 
+          ? 'Theater not found' 
+          : err.message || 'Error fetching theater data');
+        console.error('Error fetching theater data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchTheaterId();
+    } else {
+      console.log('No userId found');
+    }
+  }, [userId]);
+
+  // Fetch analytics data once theaterId is available
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      if (!theaterId) {
+        console.log('Waiting for theaterId...');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const config = {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { timeRange },
+          withCredentials: true,
+        };
+
+        const [salesRes, demoRes, peakRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/theater/${theaterId}/sales`, config),
+          axios.get(`${API_BASE_URL}/theater/${theaterId}/demographics`, config),
+          axios.get(`${API_BASE_URL}/theater/${theaterId}/peak-hours`, config)
+        ]);
+
+        const newData = {
+          sales: salesRes.data.data,
+          demographics: demoRes.data.data,
+          peakHours: peakRes.data.data
+        };
+        
+        console.log('Analytics Data:', newData);
+        setAnalyticsData(newData);
+      } catch (err) {
+        setError(axios.isAxiosError(err) 
+          ? err.response?.data?.message || err.message 
+          : err.message || 'Error fetching analytics data');
+        console.error('Error fetching analytics data:', err.response || err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyticsData();
+  }, [theaterId, timeRange]);
+
+  // Custom tooltip formatter for INR
+  const formatINR = (value) => `₹${value.toLocaleString('en-IN')}`;
+
+  if (loading) return <div className="text-center py-10">Loading analytics dashboard...</div>;
+  if (error) return <div className="text-center py-10 text-red-500">Error: {error}</div>;
 
   return (
     <div className="p-6 w-full max-w-7xl mx-auto">
@@ -116,16 +191,12 @@ const TheaterAnalyticsDashboard: React.FC = () => {
             <motion.div variants={itemVariants}>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Total Revenue
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
                   <FaChartLine className="text-muted-foreground h-4 w-4" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$17,300</div>
-                  <p className="text-xs text-muted-foreground">
-                    +15% from last month
-                  </p>
+                  <div className="text-2xl font-bold">{formatINR(analyticsData.sales.totalRevenue)}</div>
+                  <p className="text-xs text-muted-foreground">+15% from last period</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -133,16 +204,12 @@ const TheaterAnalyticsDashboard: React.FC = () => {
             <motion.div variants={itemVariants}>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Tickets Sold
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Tickets Sold</CardTitle>
                   <FaTicketAlt className="text-muted-foreground h-4 w-4" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">1,230</div>
-                  <p className="text-xs text-muted-foreground">
-                    +8% from last month
-                  </p>
+                  <div className="text-2xl font-bold">{analyticsData.sales.totalTickets.toLocaleString('en-IN')}</div>
+                  <p className="text-xs text-muted-foreground">+8% from last period</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -150,16 +217,12 @@ const TheaterAnalyticsDashboard: React.FC = () => {
             <motion.div variants={itemVariants}>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Refunds Processed
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Refunds Processed</CardTitle>
                   <FaExchangeAlt className="text-muted-foreground h-4 w-4" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">24</div>
-                  <p className="text-xs text-muted-foreground">
-                    -3% from last month
-                  </p>
+                  <div className="text-2xl font-bold">{analyticsData.sales.refundsProcessed.toLocaleString('en-IN')}</div>
+                  <p className="text-xs text-muted-foreground">-3% from last period</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -194,36 +257,19 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-                <CardDescription>
-                  Revenue and ticket sales over time
-                </CardDescription>
+                <CardDescription>Revenue and ticket sales over time</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-80 w-full">
+                <div className="h-[400px] w-full"> {/* Increased height for visibility */}
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={salesData}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 20,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <BarChart data={analyticsData.sales.salesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="day" />
-                      <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                      <YAxis yAxisId="left" orientation="left" stroke="#8884d8" tickFormatter={formatINR} />
                       <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                          borderRadius: '0.5rem',
-                          border: 'none',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
-                        }} 
-                      />
+                      <Tooltip formatter={(value, name) => name === 'Revenue' ? formatINR(value) : value} />
                       <Legend />
-                      <Bar yAxisId="left" dataKey="revenue" name="Revenue ($)" fill="#8884d8" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#8884d8" radius={[4, 4, 0, 0]} />
                       <Bar yAxisId="right" dataKey="tickets" name="Tickets Sold" fill="#82ca9d" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -233,6 +279,7 @@ const TheaterAnalyticsDashboard: React.FC = () => {
           </motion.div>
         </TabsContent>
 
+        {/* Demographics Tab */}
         <TabsContent value="demographics">
           <motion.div 
             className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
@@ -247,22 +294,22 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                   <CardDescription>Customer age demographics</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80 w-full">
+                  <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={demographicsData}
+                          data={analyticsData.demographics.ageDistribution}
                           innerRadius={60}
                           outerRadius={80}
                           paddingAngle={5}
                           dataKey="value"
                           label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                         >
-                          {demographicsData.map((entry, index) => (
+                          {analyticsData.demographics.ageDistribution.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip formatter={(value) => `${value}`} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -281,22 +328,22 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                   <CardDescription>Where our customers come from</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80 w-full">
+                  <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={locationData}
+                          data={analyticsData.demographics.locationDistribution}
                           innerRadius={60}
                           outerRadius={80}
                           paddingAngle={5}
                           dataKey="value"
                           label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                         >
-                          {locationData.map((entry, index) => (
+                          {analyticsData.demographics.locationDistribution.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip formatter={(value) => `${value}`} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -315,15 +362,15 @@ const TheaterAnalyticsDashboard: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col items-center p-4 rounded-lg bg-slate-100 dark:bg-slate-800">
-                    <span className="text-3xl font-bold">75%</span>
+                    <span className="text-3xl font-bold">{analyticsData.demographics.engagement.returnRate}%</span>
                     <span className="text-sm text-muted-foreground">Return Rate</span>
                   </div>
                   <div className="flex flex-col items-center p-4 rounded-lg bg-slate-100 dark:bg-slate-800">
-                    <span className="text-3xl font-bold">3.2</span>
+                    <span className="text-3xl font-bold">{analyticsData.demographics.engagement.avgVisits}</span>
                     <span className="text-sm text-muted-foreground">Avg. Visits per Month</span>
                   </div>
                   <div className="flex flex-col items-center p-4 rounded-lg bg-slate-100 dark:bg-slate-800">
-                    <span className="text-3xl font-bold">4.8</span>
+                    <span className="text-3xl font-bold">{analyticsData.demographics.engagement.satisfactionScore}</span>
                     <span className="text-sm text-muted-foreground">Satisfaction Score</span>
                   </div>
                 </div>
@@ -347,28 +394,13 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                   <CardDescription>When customers are most likely to purchase tickets</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80 w-full">
+                  <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={peakHoursData}
-                        margin={{
-                          top: 5,
-                          right: 30,
-                          left: 20,
-                          bottom: 5,
-                        }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <LineChart data={analyticsData.peakHours.peakHours}>
+                        <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
                         <YAxis />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                            borderRadius: '0.5rem',
-                            border: 'none',
-                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                          }} 
-                        />
+                        <Tooltip formatter={(value) => `${value}`} />
                         <Legend />
                         <Line 
                           type="monotone" 
@@ -392,28 +424,13 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                   <CardDescription>Movie attendance by time of day</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-80 w-full">
+                  <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={popularMovieTimesData}
-                        margin={{
-                          top: 20,
-                          right: 30,
-                          left: 20,
-                          bottom: 5,
-                        }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <BarChart data={analyticsData.peakHours.popularMovieTimes}>
+                        <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="movie" />
                         <YAxis />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                            borderRadius: '0.5rem',
-                            border: 'none',
-                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                          }} 
-                        />
+                        <Tooltip formatter={(value) => `${value}`} />
                         <Legend />
                         <Bar dataKey="morning" name="Morning (10am-2pm)" fill="#FFCE56" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="afternoon" name="Afternoon (2pm-6pm)" fill="#36A2EB" radius={[4, 4, 0, 0]} />
@@ -433,24 +450,20 @@ const TheaterAnalyticsDashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-7 gap-2">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
-                      // Calculate utilization percentage - sample data
-                      const utilization = [45, 35, 50, 65, 85, 95, 80][index];
-                      return (
-                        <div key={day} className="flex flex-col items-center">
-                          <div className="text-sm font-medium">{day}</div>
-                          <div className="w-full h-32 bg-slate-200 dark:bg-slate-800 rounded-md mt-2 relative overflow-hidden">
-                            <div 
-                              className="absolute bottom-0 w-full bg-green-500 dark:bg-green-600 transition-all duration-500"
-                              style={{ height: `${utilization}%` }}
-                            ></div>
-                            <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-                              {utilization}%
-                            </div>
+                    {analyticsData?.peakHours?.capacityUtilization?.map((item) => (
+                      <div key={item.day} className="flex flex-col items-center">
+                        <div className="text-sm font-medium">{item.day}</div>
+                        <div className="w-full h-32 bg-slate-200 dark:bg-slate-800 rounded-md mt-2 relative overflow-hidden">
+                          <div 
+                            className="absolute bottom-0 w-full bg-green-500 dark:bg-green-600 transition-all duration-500"
+                            style={{ height: `${item.utilization}%` }}
+                          ></div>
+                          <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
+                            {Math.round(item.utilization)}%
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
