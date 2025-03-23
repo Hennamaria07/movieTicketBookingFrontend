@@ -12,6 +12,7 @@ import {
   AiOutlineStar,
   AiOutlineFilter,
   AiOutlineDown,
+  AiOutlineClose,
 } from "react-icons/ai";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -30,6 +31,9 @@ import {
   API_GET_THEATER_SHOW_DETAILS_BY_SHOWID_URL,
   API_MODIFY_BOOKING_URL,
   API_COMFIRM_MODIFIED_BOOKING_PAYMENT,
+  API_REFUND_BOOKED_SHOW,
+  API_ADD_SHOW_REVIEW_URL,
+  API_GET_USER_REVIEW_URL,
 } from "../../utils/api";
 import { useSelector } from "react-redux";
 import axios from "axios";
@@ -44,6 +48,7 @@ import {
 import { cn } from "../../lib/utils";
 import { toast } from "sonner";
 
+
 interface Ticket {
   id: string;
   movieTitle: string;
@@ -52,7 +57,7 @@ interface Ticket {
   location: string;
   showtime: string;
   seats: string[];
-  status: "confirmed" | "pending" | "canceled";
+  status: "confirmed" | "pending" | "canceled" | "refunded";
   totalAmount: number;
   bookingDate: string;
   showtimeId?: string;
@@ -73,6 +78,11 @@ interface Seat {
   category: SeatCategory;
 }
 
+interface Review {
+  rating: number;
+  content: string;
+}
+
 const api = axios.create({
   baseURL: "http://localhost:5000",
   headers: {
@@ -85,7 +95,8 @@ const Ticket = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("newest");
-  const userId = useSelector((state: any) => state.user.auth.userInfo.id);
+  const userInfo = useSelector((state: any) => state.user.auth.userInfo);
+  const userId = userInfo?.id;
   const queryClient = useQueryClient();
 
   const { data: tickets, isLoading } = useQuery({
@@ -119,6 +130,8 @@ const Ticket = () => {
               ? "confirmed"
               : booking.transactionStatus === "Pending"
               ? "pending"
+              : booking.transactionStatus === "Refunded"
+              ? "refunded"
               : "canceled",
           totalAmount: booking.totalAmount,
           bookingDate: booking.bookingDate,
@@ -149,11 +162,11 @@ const Ticket = () => {
     });
 
   const upcomingTickets = filteredTickets?.filter((ticket) =>
-    isFuture(new Date(ticket.bookingDate))
+    isFuture(new Date(ticket.bookingDate)) && ticket.status === "confirmed"
   );
 
-  const pastTickets = filteredTickets?.filter((ticket) =>
-    !isFuture(new Date(ticket.bookingDate))
+  const pastTickets = filteredTickets?.filter(
+    (ticket) => !isFuture(new Date(ticket.bookingDate)) || ticket.status !== "confirmed"
   );
 
   return (
@@ -182,6 +195,7 @@ const Ticket = () => {
             <SelectItem value="confirmed">Confirmed</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="canceled">Canceled</SelectItem>
+            <SelectItem value="refunded">Refunded</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
@@ -249,8 +263,31 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
   const hoursToShow = Math.floor(minutesToShow / 60);
   const remainingMinutes = minutesToShow % 60;
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [selectedSeats, setSelectedSeats] = useState<string[]>(ticket.seats);
+  const [reviewRating, setReviewRating] = useState<number>(0);
+  const [reviewContent, setReviewContent] = useState<string>("");
   const queryClient = useQueryClient();
+  const userInfo = useSelector((state: any) => state.user.auth.userInfo);
+
+  // Fetch user's existing review for this showtime
+  const { data: userReview, isLoading: isReviewLoading } = useQuery({
+    queryKey: ["userReview", ticket.showtimeId, userInfo?.id],
+    queryFn: async () => {
+      if (!ticket.showtimeId || !userInfo?.id) return null;
+      const response = await axios.get(
+        `${API_GET_USER_REVIEW_URL}/${ticket.showtimeId}/reviews/user`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data.data as Review | null;
+    },
+    enabled: !!ticket.showtimeId && !!userInfo?.id,
+  });
 
   const generateAndDownloadQR = async () => {
     try {
@@ -343,6 +380,65 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const response = await axios.post(
+        `${API_REFUND_BOOKED_SHOW}/${bookingId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      toast.success(`Booking canceled successfully. Refund of ₹${ticket.totalAmount.toFixed(2)} processed.`);
+    },
+    onError: (error: any) => {
+      console.error("Error canceling booking:", error);
+      const errorMessage =
+        error.response?.data?.error?.error?.description ||
+        error.response?.data?.message ||
+        "Failed to cancel booking. Please try again.";
+      toast.error(errorMessage);
+    },
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async ({ showtimeId, rating, content, action }: { showtimeId: string; rating: number; content: string; action: 'addReview' | 'editReview' }) => {
+      const response = await axios.post(
+        `${API_ADD_SHOW_REVIEW_URL}/${showtimeId}/reviews`,
+        {
+          action,
+          rating,
+          content,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["userReview", ticket.showtimeId, userInfo?.id] });
+      setIsReviewModalOpen(false);
+      setReviewRating(0);
+      setReviewContent("");
+      toast.success(data.message || "Review submitted successfully!");
+    },
+    onError: (error: any) => {
+      console.error("Error submitting review:", error);
+      toast.error(error.response?.data?.message || "Failed to submit review. Please try again.");
+    },
+  });
+
   const handleModifyBooking = async () => {
     if (!ticket.showtimeId) {
       console.error("Cannot modify booking: showtimeId is undefined");
@@ -359,7 +455,7 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
       if (response.order) {
         const options = {
           key: response.order.key,
-          amount: response.order.amount, // Amount is in paise (e.g., 34400 for 344 INR)
+          amount: response.order.amount,
           currency: response.order.currency,
           order_id: response.order.id,
           handler: async (paymentResponse: any) => {
@@ -385,8 +481,8 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
             );
           },
           prefill: {
-            name: "User Name", // Replace with actual user data
-            email: "user@example.com",
+            name: userInfo?.firstName || "User Name",
+            email: userInfo?.email || "user@example.com",
           },
           theme: {
             color: "#3399cc",
@@ -403,6 +499,74 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
       console.error("Error modifying booking:", error);
       toast.error("Failed to modify booking. Please try again.");
     }
+  };
+
+  const handleCancelBooking = () => {
+    toast.custom(
+      (t) => (
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-2">Confirm Cancellation</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Are you sure you want to cancel this booking for <strong>{ticket.movieTitle}</strong>? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast.dismiss(t)}
+            >
+              No
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                toast.dismiss(t);
+                cancelMutation.mutate(ticket.id);
+              }}
+            >
+              Yes, Cancel
+            </Button>
+          </div>
+        </div>
+      ),
+      {
+        duration: Infinity,
+        position: "top-center",
+      }
+    );
+  };
+
+  const handleOpenReviewModal = () => {
+    if (userReview) {
+      setReviewRating(userReview.rating);
+      setReviewContent(userReview.content);
+    } else {
+      setReviewRating(0);
+      setReviewContent("");
+    }
+    setIsReviewModalOpen(true);
+  };
+
+  const handleSubmitReview = () => {
+    if (!ticket.showtimeId) {
+      toast.error("Cannot submit review: Showtime ID missing");
+      return;
+    }
+    if (reviewRating < 1 || reviewRating > 5) {
+      toast.error("Please provide a rating between 1 and 5");
+      return;
+    }
+    if (!reviewContent.trim() || reviewContent.trim().length < 10) {
+      toast.error("Review content must be at least 10 characters long");
+      return;
+    }
+    reviewMutation.mutate({
+      showtimeId: ticket.showtimeId,
+      rating: reviewRating,
+      content: reviewContent,
+      action: userReview ? 'editReview' : 'addReview',
+    });
   };
 
   const generateSeats = () => {
@@ -547,7 +711,7 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
             )}
 
             <div className="flex flex-wrap gap-2">
-              {isUpcoming ? (
+              {isUpcoming && ticket.status === "confirmed" ? (
                 <>
                   <Button
                     variant="outline"
@@ -568,18 +732,53 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
                     <AiOutlineEdit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                     Modify
                   </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 sm:h-9 text-xs sm:text-sm"
+                    onClick={handleCancelBooking}
+                    disabled={cancelMutation.isPending}
+                  >
+                    <AiOutlineClose className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    {cancelMutation.isPending ? "Canceling..." : "Cancel"}
+                  </Button>
                 </>
               ) : (
-                <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm">
-                  <AiOutlineStar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  Write Review
-                </Button>
+                ticket.status === "confirmed" && (
+                  <>
+                    {!isReviewLoading && !userReview && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 sm:h-9 text-xs sm:text-sm"
+                        onClick={handleOpenReviewModal}
+                        disabled={!ticket.showtimeId}
+                      >
+                        <AiOutlineStar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                        Write Review
+                      </Button>
+                    )}
+                    {!isReviewLoading && userReview && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 sm:h-9 text-xs sm:text-sm"
+                        onClick={handleOpenReviewModal}
+                        disabled={!ticket.showtimeId}
+                      >
+                        <AiOutlineEdit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                        Edit Review
+                      </Button>
+                    )}
+                  </>
+                )
               )}
             </div>
           </div>
         </div>
       </motion.div>
 
+      {/* Modify Booking Modal */}
       <Dialog open={isModifyModalOpen} onOpenChange={setIsModifyModalOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -717,6 +916,55 @@ const TicketCard = ({ ticket, isUpcoming, showBookingDate }: TicketCardProps) =>
                 : priceDifference > 0
                 ? `Pay ₹${priceDifference} and Confirm`
                 : "Confirm Modification"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Modal */}
+      <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{userReview ? "Edit Review" : "Write a Review"} - {ticket.movieTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Rating (1-5)</label>
+              <Select
+                value={reviewRating.toString()}
+                onValueChange={(value) => setReviewRating(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select rating" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Review</label>
+              <Input
+                value={reviewContent}
+                onChange={(e) => setReviewContent(e.target.value)}
+                placeholder="Write your review here (min 10 characters)..."
+                className="w-full"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReviewModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitReview}
+              disabled={reviewMutation.isPending}
+            >
+              {reviewMutation.isPending ? "Submitting..." : userReview ? "Update Review" : "Submit Review"}
             </Button>
           </DialogFooter>
         </DialogContent>
