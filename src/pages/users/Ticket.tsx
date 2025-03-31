@@ -83,21 +83,12 @@ interface Review {
   content: string;
 }
 
-const api = axios.create({
-  baseURL: "http://localhost:5000",
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem("token")}`,
-    "Content-Type": "application/json",
-  },
-});
-
 const Ticket = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("newest");
   const userInfo = useSelector((state: any) => state.user.auth.userInfo);
   const userId = userInfo?.id;
-  const queryClient = useQueryClient();
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets", userId],

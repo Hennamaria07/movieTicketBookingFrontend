@@ -16,7 +16,6 @@ import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Progress } from '../../components/ui/progress'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tab'
 import {
   Card,
   CardContent,
@@ -71,7 +70,7 @@ const mockTransactions: Transaction[] = [
 
 const Wallet = () => {
   const [balance, setBalance] = useState(149.99)
-  const [rewardPoints, setRewardPoints] = useState(750)
+  const [rewardPoints] = useState(750)
   const [addAmount, setAddAmount] = useState('')
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null)
 

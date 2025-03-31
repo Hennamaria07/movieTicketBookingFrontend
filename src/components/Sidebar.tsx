@@ -8,8 +8,8 @@ import {
   AiOutlineBank,
   AiOutlineMessage,
   AiOutlineTag,
-  AiOutlineWallet,
-  AiOutlineGift,
+  // AiOutlineWallet,
+  // AiOutlineGift,
   AiOutlineUser,
   AiOutlineLogout,
   AiOutlineMenu,
@@ -60,9 +60,9 @@ const customerNavItems: NavItem[] = [
   { title: 'Theaters', href: '/theaters', icon: <AiOutlineBank size={20} /> },
   { title: 'My Tickets', href: '/tickets', icon: <TbTicket size={20} /> },
   { title: 'Reviews', href: '/reviews', icon: <AiOutlineMessage size={20} /> },
-  { title: 'Offers', href: '/offers', icon: <AiOutlineTag size={20} /> },
-  { title: 'Wallet', href: '/wallet', icon: <AiOutlineWallet size={20} /> },
-  { title: 'Loyalty & Rewards', href: '/rewards', icon: <AiOutlineGift size={20} /> },
+  // { title: 'Offers', href: '/offers', icon: <AiOutlineTag size={20} /> },
+  // { title: 'Wallet', href: '/wallet', icon: <AiOutlineWallet size={20} /> },
+  // { title: 'Loyalty & Rewards', href: '/rewards', icon: <AiOutlineGift size={20} /> },
   { title: 'Profile', href: '/profile', icon: <AiOutlineUser size={20} /> }
 ];
 

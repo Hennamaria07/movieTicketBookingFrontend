@@ -1,495 +1,256 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import { 
-  AiOutlineSearch, 
-  AiFillStar,
-  AiOutlineCamera,
-  AiOutlineVideoCamera,
-  AiOutlineLike,
-  AiOutlineDislike,
-  AiFillLike,
-  AiFillDislike,
-  AiOutlineMessage,
-  AiOutlineWarning,
-  AiOutlineBarChart
-} from 'react-icons/ai'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tab'
-import { Badge } from '../../components/ui/badge'
-import { Skeleton } from '../../components/ui/skeleton'
-import { VoiceSearchButton } from '../../components/VoiceSearchButton'
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select"
-import { toast } from 'sonner'
-import { cn } from '../../lib/utils'
-
-interface Reply {
-  id: string
-  userId: string
-  userName: string
-  userAvatar: string
-  content: string
-  createdAt: string
-}
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { toast } from "sonner";
+import { AiOutlineStar, AiOutlineEdit, AiOutlineDelete } from "react-icons/ai";
+import { API_BASE_URL, API_GET_ALL_USER_REVIEW_URL } from "../../utils/api";
+import { useSelector } from "react-redux";
 
 interface Review {
-  id: string
-  movieId: string
-  movieTitle: string
-  moviePoster: string
-  userId: string
-  userName: string
-  userAvatar: string
-  rating: number
-  content: string
-  sentiment: 'positive' | 'neutral' | 'negative'
-  hasSpoilers: boolean
-  upvotes: number
-  downvotes: number
-  images: string[]
-  videoUrl?: string
-  createdAt: string
-  isUserVoted?: 'up' | 'down'
-  replies: Reply[]
+  _id: string;
+  rating: number;
+  content: string; // Changed from 'comment' to match backend schema
+  createdAt: string;
+  showtimeId: string;
+  showName: string;
 }
 
-const mockReviews: Review[] = [
-  {
-    id: '1',
-    movieId: 'm1',
-    movieTitle: 'Inception',
-    moviePoster: 'https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
-    userId: 'u1',
-    userName: 'John Doe',
-    userAvatar: 'https://ui-avatars.com/api/?name=John+Doe',
-    rating: 4.5,
-    content: 'A mind-bending masterpiece that challenges your perception of reality...',
-    sentiment: 'positive',
-    hasSpoilers: true,
-    upvotes: 150,
-    downvotes: 12,
-    images: ['https://example.com/image1.jpg'],
-    createdAt: '2024-03-10T14:22:00',
-    isUserVoted: 'up',
-    replies: []
-  },
-  // Add more reviews...
-]
+const Review: React.FC = () => {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [editingReview, setEditingReview] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState<number>(0);
+  const [editContent, setEditContent] = useState<string>("");
+  const userId = useSelector((state: any) => state.user.auth.userInfo.id);
 
-const Review = () => {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState('helpful')
-  const [ratingFilter, setRatingFilter] = useState('all')
-  const [activeTab, setActiveTab] = useState('all-reviews')
-
-  const { data: reviews, isLoading } = useQuery({
-    queryKey: ['reviews'],
-    queryFn: async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      return mockReviews
-    }
-  })
-
-  const filteredReviews = reviews?.filter(review => {
-    const matchesSearch = review.movieTitle
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase()) ||
-      review.content.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesRating = ratingFilter === 'all' || 
-      Math.floor(review.rating) === parseInt(ratingFilter)
-    
-    return matchesSearch && matchesRating
-  }).sort((a, b) => {
-    switch (sortBy) {
-      case 'recent':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      case 'rating':
-        return b.rating - a.rating
-      case 'ai':
-        // AI recommendation logic here
-        return 0
-      default: // helpful
-        return (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes)
-    }
-  })
-
-  return (
-    <div className="max-w-screen min-h-screen space-y-6 pt-4">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <AiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search reviews..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-12"
-          />
-          <VoiceSearchButton 
-            onTranscript={setSearchQuery}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
-          />
-        </div>
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="helpful">Most Helpful</SelectItem>
-            <SelectItem value="recent">Most Recent</SelectItem>
-            <SelectItem value="rating">Highest Rated</SelectItem>
-            <SelectItem value="ai">AI Recommended</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={ratingFilter} onValueChange={setRatingFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Filter by rating" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Ratings</SelectItem>
-            {[5, 4, 3, 2, 1].map(rating => (
-              <SelectItem key={rating} value={rating.toString()}>
-                {rating} Stars
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all-reviews">All Reviews</TabsTrigger>
-          <TabsTrigger value="my-reviews">My Reviews</TabsTrigger>
-          <TabsTrigger value="watch-party">Watch Party</TabsTrigger>
-          <TabsTrigger value="discussions">Discussions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all-reviews" className="space-y-6">
-          {/* Analytics Section */}
-          <section className="bg-card rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <AiOutlineBarChart className="h-5 w-5" />
-              Review Analytics
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Add charts and analytics here */}
-            </div>
-          </section>
-
-          {/* Reviews Grid */}
-          <div className="grid gap-4">
-            <AnimatePresence mode="wait">
-              {isLoading ? (
-                Array(3).fill(0).map((_, i) => (
-                  <ReviewCardSkeleton key={i} />
-                ))
-              ) : (
-                filteredReviews?.map((review) => (
-                  <ReviewCard 
-                    key={review.id} 
-                    review={review}
-                  />
-                ))
-              )}
-            </AnimatePresence>
-          </div>
-        </TabsContent>
-
-        {/* Other tab contents */}
-      </Tabs>
-    </div>
-  )
-}
-
-interface ReviewCardProps {
-  review: Review
-}
-
-const ReviewCard = ({ review }: ReviewCardProps) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [voteStatus, setVoteStatus] = useState(review.isUserVoted)
-  const [showReplies, setShowReplies] = useState(false)
-  const [replyText, setReplyText] = useState('')
-  const [upvotes, setUpvotes] = useState(review.upvotes)
-  const [downvotes, setDownvotes] = useState(review.downvotes)
-
-  const handleVote = (type: 'up' | 'down') => {
-    if (voteStatus === type) {
-      // Remove vote
-      setVoteStatus(undefined)
-      if (type === 'up') {
-        setUpvotes(prev => prev - 1)
-      } else {
-        setDownvotes(prev => prev - 1)
-      }
-    } else {
-      // Add/change vote
-      if (voteStatus === 'up' && type === 'down') {
-        setUpvotes(prev => prev - 1)
-        setDownvotes(prev => prev + 1)
-      } else if (voteStatus === 'down' && type === 'up') {
-        setDownvotes(prev => prev - 1)
-        setUpvotes(prev => prev + 1)
-      } else {
-        if (type === 'up') {
-          setUpvotes(prev => prev + 1)
-        } else {
-          setDownvotes(prev => prev + 1)
+  useEffect(() => {
+    const fetchUserReviews = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        if (!token) {
+          toast.error("Please log in to view your reviews");
+          return;
         }
+
+        const response = await axios.get(`${API_GET_ALL_USER_REVIEW_URL}/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+          params: { page, limit: 5 }, // Re-added pagination params
+        });
+
+        if (response.data.success) {
+          setReviews(response.data.data.reviews);
+          setTotalPages(response.data.data.totalPages);
+        } else {
+          toast.error(response.data.message || "Failed to fetch reviews");
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        toast.error("Unable to load reviews");
+      } finally {
+        setLoading(false);
       }
-      setVoteStatus(type)
+    };
+
+    fetchUserReviews();
+  }, [page]);
+
+  const handleEditReview = (review: Review) => {
+    setEditingReview(review._id);
+    setEditRating(review.rating);
+    setEditContent(review.content);
+  };
+
+  const handleSaveEdit = async (showtimeId: string, reviewId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.put(
+        `${API_BASE_URL}/user/showtimes/${showtimeId}/reviews/${reviewId}`,
+        { rating: editRating, content: editContent },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setReviews(
+          reviews.map((r) =>
+            r._id === reviewId
+              ? { ...r, rating: editRating, content: editContent }
+              : r
+          )
+        );
+        setEditingReview(null);
+        toast.success("Review updated successfully");
+      } else {
+        toast.error(response.data.message || "Failed to update review");
+      }
+    } catch (error) {
+      console.error("Error updating review:", error);
+      toast.error("Failed to update review");
     }
+  };
+
+  const handleDeleteReview = async (showtimeId: string, reviewId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.delete(
+        `${API_BASE_URL}/user/showtimes/${showtimeId}/reviews/${reviewId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setReviews(reviews.filter((review) => review._id !== reviewId));
+        toast.success("Review deleted successfully");
+      } else {
+        toast.error(response.data.message || "Failed to delete review");
+      }
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      toast.error("Failed to delete review");
+    }
+  };
+
+  const renderStars = (rating: number) => {
+    return Array.from({ length: 5 }, (_, index) => (
+      <AiOutlineStar
+        key={index}
+        className={`h-5 w-5 ${index < rating ? "text-yellow-500" : "text-gray-300"}`}
+      />
+    ));
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">Loading your reviews...</CardContent>
+      </Card>
+    );
   }
 
-  const handleReply = () => {
-    if (!replyText.trim()) return
-
-    // Add reply logic here
-    toast.success("Reply posted successfully!", {
-      description: "Your reply has been added to the discussion"
-    })
-    setReplyText('')
-    setShowReplies(true)
+  if (reviews.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <p>You haven't written any reviews yet.</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="bg-card rounded-lg overflow-hidden"
-    >
-      <div className="p-3 sm:p-4">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
-          <img 
-            src={review.moviePoster}
-            alt={review.movieTitle}
-            className="w-20 h-28 sm:w-16 sm:h-24 rounded-md object-cover"
-          />
-          <div className="flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold text-base sm:text-lg">{review.movieTitle}</h3>
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mt-1">
-                  <img 
-                    src={review.userAvatar}
-                    alt={review.userName}
-                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
-                  />
-                  <span>{review.userName}</span>
-                  <span>•</span>
-                  <span>{format(new Date(review.createdAt), 'PP')}</span>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>My Reviews</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {reviews.map((review: Review) => (
+            <div key={review._id} className="border-b last:border-b-0 py-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold text-xl">{review.showName}</h3>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleEditReview(review)}
+                  >
+                    <AiOutlineEdit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => handleDeleteReview(review.showtimeId, review._id)}
+                  >
+                    <AiOutlineDelete className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-              <Badge 
-                variant={
-                  review.sentiment === 'positive' 
-                    ? 'default'
-                    : review.sentiment === 'neutral'
-                      ? 'secondary'
-                      : 'destructive'
-                }
-                className="text-xs"
-              >
-                {review.sentiment}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <AiFillStar 
-                  key={i}
-                  className={cn(
-                    "h-3 w-3 sm:h-4 sm:w-4",
-                    i < Math.floor(review.rating) ? "text-yellow-500" : "text-gray-300"
-                  )}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Content */}
-        <div className="space-y-3 sm:space-y-4">
-          {review.hasSpoilers && !isExpanded ? (
-            <div className="bg-muted/50 p-3 sm:p-4 rounded-md">
-              <p className="text-xs sm:text-sm text-muted-foreground text-center">
-                This review contains spoilers
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="mt-2 w-full h-8 sm:h-9 text-xs sm:text-sm"
-                onClick={() => setIsExpanded(true)}
-              >
-                <AiOutlineWarning className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                Reveal Spoiler
-              </Button>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs sm:text-sm">{review.content}</p>
-              {review.images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto py-2 scrollbar-thin">
-                  {review.images.map((image, i) => (
-                    <img 
-                      key={i}
-                      src={image}
-                      alt={`Review image ${i + 1}`}
-                      className="h-20 w-20 sm:h-24 sm:w-24 rounded-md object-cover"
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-3 sm:mt-4">
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => handleVote('up')}
-              className={cn(
-                "h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3",
-                voteStatus === 'up' ? "text-primary" : ""
-              )}
-            >
-              {voteStatus === 'up' ? (
-                <AiFillLike className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              ) : (
-                <AiOutlineLike className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              )}
-              {upvotes}
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => handleVote('down')}
-              className={cn(
-                "h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3",
-                voteStatus === 'down' ? "text-destructive" : ""
-              )}
-            >
-              {voteStatus === 'down' ? (
-                <AiFillDislike className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              ) : (
-                <AiOutlineDislike className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              )}
-              {downvotes}
-            </Button>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setShowReplies(!showReplies)}
-            className="h-8 sm:h-9 text-xs sm:text-sm"
-          >
-            <AiOutlineMessage className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            {review.replies?.length || 0} Replies
-          </Button>
-          <div className="flex-1" />
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 sm:h-9 sm:w-9"
-          >
-            <AiOutlineCamera className="h-3 w-3 sm:h-4 sm:w-4" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-9"
-          >
-            <AiOutlineVideoCamera className="h-3 w-3 sm:h-4 sm:w-4" />
-          </Button>
-        </div>
-
-        {/* Replies Section */}
-        {showReplies && (
-          <div className="mt-3 pt-3 sm:mt-4 sm:pt-4 border-t border-border">
-            <div className="space-y-3 sm:space-y-4">
-              {review.replies?.map((reply) => (
-                <div key={reply.id} className="flex gap-2 sm:gap-3">
-                  <img 
-                    src={reply.userAvatar}
-                    alt={reply.userName}
-                    className="w-6 h-6 sm:w-8 sm:h-8 rounded-full"
+              {editingReview === review._id ? (
+                <div className="space-y-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="5"
+                    value={editRating}
+                    onChange={(e) => setEditRating(parseInt(e.target.value))}
+                    className="w-16 p-1 border rounded"
                   />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-xs sm:text-sm">{reply.userName}</span>
-                      <span className="text-[10px] sm:text-xs text-muted-foreground">
-                        {format(new Date(reply.createdAt), 'PP')}
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm mt-1">{reply.content}</p>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={() => handleSaveEdit(review.showtimeId, review._id)}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditingReview(null)}
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </div>
-              ))}
+              ) : (
+                <>
+                  <div className="flex items-center space-x-1">
+                    {renderStars(review.rating)}
+                  </div>
+                  <p className="text-muted-foreground">{review.content}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </p>
+                </>
+              )}
             </div>
+          ))}
+        </CardContent>
+      </Card>
 
-            {/* Reply Input */}
-            <div className="flex gap-2 sm:gap-3 mt-3 sm:mt-4">
-              <img 
-                src="https://ui-avatars.com/api/?name=Current+User"
-                alt="Current User"
-                className="w-6 h-6 sm:w-8 sm:h-8 rounded-full"
-              />
-              <div className="flex-1">
-                <Input
-                  placeholder="Write a reply..."
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  className="bg-muted text-xs sm:text-sm h-8 sm:h-9"
-                />
-                <Button 
-                  size="sm" 
-                  className="mt-2 h-8 sm:h-9 text-xs sm:text-sm"
-                  onClick={handleReply}
-                  disabled={!replyText.trim()}
-                >
-                  Post Reply
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  )
-}
-
-const ReviewCardSkeleton = () => (
-  <div className="bg-card rounded-lg p-4">
-    <div className="flex gap-4 mb-4">
-      <Skeleton className="w-16 h-24 rounded-md" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-24" />
-      </div>
-      <Skeleton className="h-6 w-20" />
+      {totalPages > 1 && (
+        <div className="flex justify-center space-x-2">
+          <Button
+            variant="outline"
+            disabled={page === 1}
+            onClick={() => setPage((prev) => prev - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            disabled={page === totalPages}
+            onClick={() => setPage((prev) => prev + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
-    <div className="space-y-2">
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-5/6" />
-      <Skeleton className="h-4 w-4/6" />
-    </div>
-  </div>
-)
+  );
+};
 
-export default Review
+export default Review;

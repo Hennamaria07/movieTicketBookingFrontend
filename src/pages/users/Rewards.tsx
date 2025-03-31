@@ -2,11 +2,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   AiOutlineCrown, 
-  AiOutlineGift,
-  AiOutlineHistory,
   AiOutlineUserAdd,
   AiOutlineStar,
-  AiOutlineTicket,
   AiOutlineTrophy,
   AiOutlineLink,
   AiOutlineCopy,
@@ -16,7 +13,6 @@ import { BiMoviePlay } from 'react-icons/bi'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Progress } from '../../components/ui/progress'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tab'
 import {
   Card,
   CardContent,
@@ -65,9 +61,10 @@ const earnMethods = [
   }
 ]
 
+
 const Rewards = () => {
-  const [points, setPoints] = useState(750)
-  const [currentTier, setCurrentTier] = useState('Silver')
+  const [points] = useState(750)
+  const [currentTier] = useState('Silver')
   const [referralCode] = useState('MOVIE123')
   const [copied, setCopied] = useState(false)
 
